@@ -325,3 +325,57 @@ class Analysis(models.Model):
     def fastest_lap(self):
         """Return the fastest lap in this analysis"""
         return self.laps.filter(is_valid=True).order_by('lap_time').first()
+
+
+class SystemUpdate(models.Model):
+    """
+    Track system update history and status.
+    Records when updates are initiated, their progress, and outcomes.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('running', 'Running'),
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+        ('rolled_back', 'Rolled Back'),
+    ]
+
+    # Update details
+    triggered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='triggered_updates')
+    old_version = models.CharField(max_length=50, help_text="Version before update")
+    new_version = models.CharField(max_length=50, blank=True, help_text="Version after update")
+    old_commit = models.CharField(max_length=50, blank=True, help_text="Git commit before update")
+    new_commit = models.CharField(max_length=50, blank=True, help_text="Git commit after update")
+
+    # Status tracking
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status_message = models.TextField(blank=True, help_text="Current status or error message")
+    progress = models.IntegerField(default=0, help_text="Update progress percentage (0-100)")
+
+    # Timing
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    # Logs
+    log_file = models.TextField(blank=True, help_text="Path to update log file")
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"Update to {self.new_version or 'pending'} - {self.status} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
+
+    @property
+    def duration(self):
+        """Calculate update duration"""
+        if self.started_at and self.completed_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None

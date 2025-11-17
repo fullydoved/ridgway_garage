@@ -4,7 +4,7 @@ Django Admin configuration for Telemetry models.
 
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Driver, Team, TeamMembership, Track, Car, Session, Lap, TelemetryData, Analysis
+from .models import Driver, Team, TeamMembership, Track, Car, Session, Lap, TelemetryData, Analysis, SystemUpdate
 
 
 @admin.register(Driver)
@@ -192,5 +192,71 @@ class AnalysisAdmin(admin.ModelAdmin):
         }),
         ('Privacy', {
             'fields': ('is_public',)
+        }),
+    )
+
+
+@admin.register(SystemUpdate)
+class SystemUpdateAdmin(admin.ModelAdmin):
+    list_display = ['created_at', 'status_display', 'old_version', 'new_version', 'triggered_by', 'progress_display', 'duration_display']
+    list_filter = ['status', 'created_at']
+    search_fields = ['old_version', 'new_version', 'status_message']
+    readonly_fields = ['created_at', 'updated_at', 'started_at', 'completed_at', 'old_commit', 'new_commit', 'duration_display']
+    raw_id_fields = ['triggered_by']
+
+    def status_display(self, obj):
+        """Display status with color coding."""
+        colors = {
+            'pending': 'orange',
+            'running': 'blue',
+            'success': 'green',
+            'failed': 'red',
+            'rolled_back': 'purple',
+        }
+        color = colors.get(obj.status, 'black')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color,
+            obj.get_status_display()
+        )
+    status_display.short_description = 'Status'
+    status_display.admin_order_field = 'status'
+
+    def progress_display(self, obj):
+        """Display progress bar."""
+        if obj.status == 'running':
+            return format_html(
+                '<div style="width: 100px; background-color: #f0f0f0; border-radius: 3px;">'
+                '<div style="width: {}px; background-color: #4CAF50; height: 20px; border-radius: 3px; text-align: center; color: white; line-height: 20px;">{} %</div>'
+                '</div>',
+                obj.progress,
+                obj.progress
+            )
+        return f'{obj.progress}%'
+    progress_display.short_description = 'Progress'
+
+    def duration_display(self, obj):
+        """Display update duration."""
+        duration = obj.duration
+        if duration:
+            minutes = int(duration // 60)
+            seconds = int(duration % 60)
+            return f'{minutes}m {seconds}s'
+        return '-'
+    duration_display.short_description = 'Duration'
+
+    fieldsets = (
+        ('Update Information', {
+            'fields': ('triggered_by', 'old_version', 'new_version', 'old_commit', 'new_commit')
+        }),
+        ('Status', {
+            'fields': ('status', 'status_message', 'progress')
+        }),
+        ('Timing', {
+            'fields': ('created_at', 'started_at', 'completed_at', 'duration_display')
+        }),
+        ('Logs', {
+            'fields': ('log_file',),
+            'classes': ('collapse',)
         }),
     )

@@ -4,6 +4,7 @@ Views for the Ridgway Garage telemetry app.
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 
@@ -457,3 +458,164 @@ def analysis_remove_lap(request, pk, lap_id):
     messages.success(request, f'Lap {lap.lap_number} removed from "{analysis.name}"')
 
     return redirect('telemetry:analysis_detail', pk=analysis.pk)
+
+
+# ================================
+# System Update Views
+# ================================
+
+@staff_member_required
+def system_update_check(request):
+    """
+    Check for available updates from GitHub.
+    Returns JSON with current version, latest version, and changelog.
+    """
+    from django.conf import settings
+    import requests
+    import subprocess
+    from django.http import JsonResponse
+
+    try:
+        # Get current version and commit
+        current_version = getattr(settings, 'VERSION', 'unknown')
+
+        # Get current git commit
+        try:
+            current_commit = subprocess.check_output(
+                ['git', 'rev-parse', 'HEAD'],
+                cwd=settings.BASE_DIR.parent,
+                text=True
+            ).strip()
+            current_commit_short = current_commit[:7]
+        except:
+            current_commit = 'unknown'
+            current_commit_short = 'unknown'
+
+        # Get latest commit from GitHub
+        try:
+            # GitHub API to get latest commit on main branch
+            response = requests.get(
+                'https://api.github.com/repos/fullydoved/ridgway_garage/commits/main',
+                timeout=10
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            latest_commit = data['sha']
+            latest_commit_short = latest_commit[:7]
+            latest_message = data['commit']['message']
+            latest_date = data['commit']['author']['date']
+
+            # Check if update available
+            update_available = current_commit != latest_commit
+
+            return JsonResponse({
+                'success': True,
+                'current_version': current_version,
+                'current_commit': current_commit_short,
+                'latest_commit': latest_commit_short,
+                'latest_message': latest_message,
+                'latest_date': latest_date,
+                'update_available': update_available,
+            })
+
+        except requests.RequestException as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'Could not connect to GitHub: {str(e)}',
+                'current_version': current_version,
+                'current_commit': current_commit_short,
+            })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+        })
+
+
+@staff_member_required
+def system_update_page(request):
+    """
+    Display the system update page with current version,
+    available updates, and update history.
+    """
+    from django.conf import settings
+    from .models import SystemUpdate
+
+    # Get current version
+    current_version = getattr(settings, 'VERSION', 'unknown')
+
+    # Get recent updates
+    recent_updates = SystemUpdate.objects.all()[:10]
+
+    # Check if an update is currently running
+    running_update = SystemUpdate.objects.filter(status='running').first()
+
+    context = {
+        'current_version': current_version,
+        'recent_updates': recent_updates,
+        'running_update': running_update,
+    }
+
+    return render(request, 'telemetry/system_update.html', context)
+
+
+@staff_member_required
+@require_POST
+def system_update_trigger(request):
+    """
+    Trigger a system update.
+    Creates a SystemUpdate record and starts the Celery task.
+    """
+    from django.conf import settings
+    from .models import SystemUpdate
+    from .tasks import execute_system_update
+    import subprocess
+
+    # Check if an update is already running
+    if SystemUpdate.objects.filter(status='running').exists():
+        messages.error(request, 'An update is already in progress.')
+        return redirect('telemetry:system_update')
+
+    # Get current version and commit
+    current_version = getattr(settings, 'VERSION', 'unknown')
+    try:
+        current_commit = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            cwd=settings.BASE_DIR.parent,
+            text=True
+        ).strip()
+    except:
+        current_commit = 'unknown'
+
+    # Create update record
+    update = SystemUpdate.objects.create(
+        triggered_by=request.user,
+        old_version=current_version,
+        old_commit=current_commit,
+        status='pending',
+        progress=0,
+    )
+
+    # Start Celery task
+    execute_system_update.delay(update.id, request.user.id)
+
+    messages.success(request, 'System update started! This page will show progress in real-time.')
+    return redirect('telemetry:system_update')
+
+
+@staff_member_required
+def system_update_history(request):
+    """
+    Display full update history.
+    """
+    from .models import SystemUpdate
+
+    updates = SystemUpdate.objects.all()
+
+    context = {
+        'updates': updates,
+    }
+
+    return render(request, 'telemetry/system_update_history.html', context)

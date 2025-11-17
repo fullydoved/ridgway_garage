@@ -1,0 +1,106 @@
+{% extends 'telemetry/base.html' %}
+{% load static %}
+
+{% block title %}Update History - Ridgway Garage{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-clock-history"></i> Update History</h1>
+                <p class="text-muted">Complete history of system updates</p>
+            </div>
+            <a href="{% url 'telemetry:system_update' %}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left"></i> Back to Updates
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                {% if updates %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Old Version</th>
+                                <th>New Version</th>
+                                <th>Status</th>
+                                <th>Triggered By</th>
+                                <th>Duration</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for update in updates %}
+                            <tr>
+                                <td>{{ update.created_at|date:"Y-m-d H:i:s" }}</td>
+                                <td>
+                                    {{ update.old_version|default:"-" }}
+                                    {% if update.old_commit %}
+                                        <br><small class="text-muted">{{ update.old_commit|slice:":7" }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ update.new_version|default:"-" }}
+                                    {% if update.new_commit %}
+                                        <br><small class="text-muted">{{ update.new_commit|slice:":7" }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if update.status == 'success' %}
+                                        <span class="badge bg-success">
+                                            <i class="bi bi-check-circle"></i> Success
+                                        </span>
+                                    {% elif update.status == 'failed' %}
+                                        <span class="badge bg-danger">
+                                            <i class="bi bi-x-circle"></i> Failed
+                                        </span>
+                                    {% elif update.status == 'running' %}
+                                        <span class="badge bg-primary">
+                                            <i class="bi bi-arrow-repeat"></i> Running
+                                        </span>
+                                    {% elif update.status == 'rolled_back' %}
+                                        <span class="badge bg-warning">
+                                            <i class="bi bi-arrow-counterclockwise"></i> Rolled Back
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            {{ update.get_status_display }}
+                                        </span>
+                                    {% endif %}
+                                    <br>
+                                    <small class="text-muted">{{ update.progress }}%</small>
+                                </td>
+                                <td>{{ update.triggered_by.username|default:"System" }}</td>
+                                <td>
+                                    {% if update.duration %}
+                                        {{ update.duration|floatformat:0 }}s
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ update.status_message|truncatewords:10 }}</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-inbox display-1 text-muted"></i>
+                    <p class="text-muted mt-3">No update history available.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

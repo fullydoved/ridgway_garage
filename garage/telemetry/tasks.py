@@ -364,3 +364,233 @@ def parse_ibt_file(self, session_id):
 
         # Retry with exponential backoff
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
+
+
+def send_update_progress(update_id, status, progress, message=''):
+    """
+    Send system update progress via WebSocket to connected clients.
+
+    Args:
+        update_id: ID of the SystemUpdate object
+        status: 'running', 'success', 'failed', or 'rolled_back'
+        progress: Integer 0-100 representing completion percentage
+        message: Optional status message
+    """
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        'system_update',
+        {
+            'type': 'update_progress',
+            'update_id': update_id,
+            'status': status,
+            'progress': progress,
+            'message': message,
+        }
+    )
+
+
+@shared_task(bind=True)
+def execute_system_update(self, update_id, user_id):
+    """
+    Execute the system update script and monitor its progress.
+
+    This task runs the update.sh script in the background and monitors
+    the update_status.json file for progress updates.
+
+    Args:
+        update_id: Primary key of the SystemUpdate object
+        user_id: ID of the user who triggered the update
+    """
+    from .models import SystemUpdate
+    from django.contrib.auth.models import User
+    import subprocess
+    import os
+    import json
+    import time
+    from pathlib import Path
+
+    try:
+        # Get the update record
+        update = SystemUpdate.objects.get(id=update_id)
+        user = User.objects.get(id=user_id)
+
+        # Update status to running
+        update.status = 'running'
+        update.started_at = timezone.now()
+        update.save()
+
+        logger.info(f"Starting system update {update_id} triggered by {user.username}")
+
+        # Send initial progress update
+        send_update_progress(update_id, 'running', 0, 'Starting update process...')
+
+        # Path to the update script
+        project_dir = Path(__file__).resolve().parent.parent.parent.parent
+        update_script = project_dir / 'update.sh'
+        status_file = project_dir / 'update_status.json'
+        log_file = project_dir / 'update.log'
+
+        if not update_script.exists():
+            raise FileNotFoundError(f"Update script not found: {update_script}")
+
+        # Remove old status file if it exists
+        if status_file.exists():
+            status_file.unlink()
+
+        # Execute the update script in the background
+        # The script runs on the host, not inside the container
+        # We use subprocess.Popen to run it asynchronously
+        process = subprocess.Popen(
+            [str(update_script)],
+            cwd=str(project_dir),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        logger.info(f"Update script started with PID {process.pid}")
+
+        # Monitor the status file for progress updates
+        last_progress = 0
+        last_status = 'running'
+        timeout_counter = 0
+        max_timeout = 600  # 10 minutes maximum
+
+        while True:
+            # Check if process is still running
+            poll = process.poll()
+
+            # Try to read status file
+            if status_file.exists():
+                try:
+                    with open(status_file, 'r') as f:
+                        status_data = json.load(f)
+
+                    current_status = status_data.get('status', 'running')
+                    current_progress = status_data.get('progress', 0)
+                    current_message = status_data.get('message', '')
+
+                    # Update database if progress changed
+                    if current_progress != last_progress or current_status != last_status:
+                        update.status = current_status
+                        update.progress = current_progress
+                        update.status_message = current_message
+                        update.save()
+
+                        # Send WebSocket update
+                        send_update_progress(
+                            update_id,
+                            current_status,
+                            current_progress,
+                            current_message
+                        )
+
+                        last_progress = current_progress
+                        last_status = current_status
+
+                        logger.info(f"Update progress: {current_progress}% - {current_message}")
+
+                    # Check if update completed
+                    if current_status in ['success', 'failed', 'error']:
+                        break
+
+                except (json.JSONDecodeError, IOError) as e:
+                    logger.debug(f"Could not read status file: {e}")
+
+            # Check if process finished
+            if poll is not None:
+                # Process finished
+                stdout, stderr = process.communicate()
+
+                if poll == 0:
+                    # Success
+                    logger.info("Update script completed successfully")
+
+                    # Read final version
+                    version_file = project_dir / 'VERSION'
+                    if version_file.exists():
+                        with open(version_file, 'r') as f:
+                            new_version = f.read().strip()
+                            update.new_version = new_version
+
+                    update.status = 'success'
+                    update.progress = 100
+                    update.status_message = 'Update completed successfully'
+                    update.completed_at = timezone.now()
+                    update.log_file = str(log_file)
+                    update.save()
+
+                    send_update_progress(
+                        update_id,
+                        'success',
+                        100,
+                        'Update completed successfully! Please refresh your browser.'
+                    )
+
+                    return {
+                        'status': 'success',
+                        'update_id': update_id,
+                        'new_version': update.new_version
+                    }
+                else:
+                    # Failed
+                    error_msg = stderr if stderr else 'Update script failed'
+                    logger.error(f"Update script failed with exit code {poll}: {error_msg}")
+
+                    update.status = 'failed'
+                    update.status_message = f'Update failed: {error_msg[:200]}'
+                    update.completed_at = timezone.now()
+                    update.log_file = str(log_file)
+                    update.save()
+
+                    send_update_progress(
+                        update_id,
+                        'failed',
+                        0,
+                        f'Update failed: {error_msg[:100]}'
+                    )
+
+                    raise Exception(f"Update script failed: {error_msg}")
+
+            # Timeout check
+            timeout_counter += 1
+            if timeout_counter > max_timeout:
+                logger.error("Update timed out after 10 minutes")
+                process.kill()
+
+                update.status = 'failed'
+                update.status_message = 'Update timed out after 10 minutes'
+                update.completed_at = timezone.now()
+                update.save()
+
+                send_update_progress(update_id, 'failed', 0, 'Update timed out')
+                raise Exception("Update timed out")
+
+            # Wait before next check
+            time.sleep(1)
+
+    except ObjectDoesNotExist as e:
+        logger.error(f"Update record {update_id} or user {user_id} does not exist")
+        raise
+
+    except Exception as e:
+        logger.error(f"Error executing system update: {str(e)}", exc_info=True)
+
+        # Update database with error
+        try:
+            update = SystemUpdate.objects.get(id=update_id)
+            update.status = 'failed'
+            update.status_message = f'Error: {str(e)[:200]}'
+            update.completed_at = timezone.now()
+            update.save()
+
+            send_update_progress(
+                update_id,
+                'failed',
+                0,
+                f'Update failed: {str(e)[:100]}'
+            )
+        except:
+            pass
+
+        raise

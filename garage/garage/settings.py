@@ -16,6 +16,14 @@ from decouple import config
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Application version
+VERSION_FILE = BASE_DIR.parent / 'VERSION'
+try:
+    with open(VERSION_FILE, 'r') as f:
+        VERSION = f.read().strip()
+except FileNotFoundError:
+    VERSION = '1.0.0'
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/

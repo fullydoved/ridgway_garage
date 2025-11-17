@@ -31,4 +31,10 @@ urlpatterns = [
     path('analyses/<int:pk>/delete/', views.analysis_delete, name='analysis_delete'),
     path('analyses/<int:pk>/add-lap/<int:lap_id>/', views.analysis_add_lap, name='analysis_add_lap'),
     path('analyses/<int:pk>/remove-lap/<int:lap_id>/', views.analysis_remove_lap, name='analysis_remove_lap'),
+
+    # System Update (admin only)
+    path('system/update/', views.system_update_page, name='system_update'),
+    path('system/update/check/', views.system_update_check, name='system_update_check'),
+    path('system/update/trigger/', views.system_update_trigger, name='system_update_trigger'),
+    path('system/update/history/', views.system_update_history, name='system_update_history'),
 ]
