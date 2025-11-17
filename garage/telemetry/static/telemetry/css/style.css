@@ -1,0 +1,202 @@
+/* Custom styles for Ridgway Garage */
+
+:root {
+    --primary-color: #0d6efd;
+    --danger-color: #dc3545;
+    --success-color: #198754;
+    --warning-color: #ffc107;
+}
+
+body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+}
+
+/* Card hover effects */
+.card {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+/* Session cards */
+.session-card {
+    border-left: 4px solid var(--primary-color);
+}
+
+.session-card.processing {
+    border-left-color: var(--warning-color);
+}
+
+.session-card.failed {
+    border-left-color: var(--danger-color);
+}
+
+.session-card.completed {
+    border-left-color: var(--success-color);
+}
+
+/* Lap time styling */
+.lap-time {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.lap-time.fastest {
+    color: #9d4edd;
+}
+
+.lap-time.valid {
+    color: #52b788;
+}
+
+.lap-time.invalid {
+    color: #ef476f;
+}
+
+/* Track map container */
+#track-map {
+    height: 400px;
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+
+/* Telemetry chart styling */
+.telemetry-chart {
+    min-height: 400px;
+    border-radius: 0.375rem;
+    background: rgba(0, 0, 0, 0.1);
+    padding: 10px;
+}
+
+/* Upload dropzone */
+.upload-dropzone {
+    border: 3px dashed #6c757d;
+    border-radius: 0.5rem;
+    padding: 3rem;
+    text-align: center;
+    transition: all 0.3s;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.upload-dropzone:hover,
+.upload-dropzone.dragover {
+    border-color: var(--primary-color);
+    background: rgba(13, 110, 253, 0.1);
+}
+
+.upload-dropzone i {
+    font-size: 3rem;
+    color: #6c757d;
+}
+
+.upload-dropzone:hover i,
+.upload-dropzone.dragover i {
+    color: var(--primary-color);
+}
+
+/* Progress bars */
+.progress-bar-animated {
+    animation: progress-bar-stripes 1s linear infinite;
+}
+
+/* Badge styling */
+.badge-session-type {
+    font-size: 0.85em;
+    padding: 0.35em 0.65em;
+}
+
+/* Table enhancements */
+.table-hover tbody tr {
+    transition: background-color 0.2s;
+}
+
+/* Stats cards */
+.stat-card {
+    border-left: 4px solid var(--primary-color);
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6c757d;
+}
+
+/* Comparison overlay */
+.comparison-selector {
+    position: sticky;
+    top: 70px;
+    background: var(--bs-body-bg);
+    z-index: 100;
+    padding: 1rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Loading spinner overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.loading-spinner {
+    text-align: center;
+}
+
+/* Responsive charts */
+@media (max-width: 768px) {
+    .telemetry-chart {
+        min-height: 300px;
+    }
+
+    #track-map {
+        height: 300px;
+    }
+}
+
+/* Dark theme adjustments */
+[data-bs-theme="dark"] .card {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-bs-theme="dark"] .upload-dropzone {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Animation for status badges */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.badge.processing {
+    animation: pulse 2s ease-in-out infinite;
+}

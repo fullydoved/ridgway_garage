@@ -1,0 +1,285 @@
+{% extends 'telemetry/base.html' %}
+
+{% block title %}Dashboard - Ridgway Garage{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="mb-2">
+                    <i class="bi bi-speedometer2 text-primary"></i> Dashboard
+                </h1>
+                <p class="text-muted">Welcome to Ridgway Garage - Your iRacing Telemetry Platform</p>
+            </div>
+            {% if user.is_authenticated %}
+            <a href="{% url 'telemetry:upload' %}" class="btn btn-primary btn-lg">
+                <i class="bi bi-upload"></i> Upload Telemetry
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if user.is_authenticated %}
+<!-- Stats Overview -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="stat-label mb-2">Total Sessions</div>
+                <div class="stat-value text-primary">{{ stats.total_sessions|default:0 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="stat-label mb-2">Total Laps</div>
+                <div class="stat-value text-success">{{ stats.total_laps|default:0 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="stat-label mb-2">Best Lap</div>
+                <div class="stat-value text-warning">
+                    {% if stats.best_lap %}
+                        {{ stats.best_lap.lap_time|floatformat:3 }}s
+                    {% else %}
+                        --
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="stat-label mb-2">Processing</div>
+                <div class="stat-value text-info">{{ stats.processing|default:0 }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Sessions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-clock-history"></i> Recent Sessions</h5>
+                <a href="{% url 'telemetry:session_list' %}" class="btn btn-sm btn-outline-primary">
+                    View All <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="card-body p-0">
+                {% if recent_sessions %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Track</th>
+                                <th>Car</th>
+                                <th>Session Type</th>
+                                <th>Date</th>
+                                <th>Laps</th>
+                                <th>Best Lap</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for session in recent_sessions %}
+                            <tr>
+                                <td><strong>{% if session.track %}{{ session.track.name }}{% else %}<span class="text-muted">Detecting...</span>{% endif %}</strong></td>
+                                <td>{% if session.car %}{{ session.car.name }}{% else %}<span class="text-muted">Detecting...</span>{% endif %}</td>
+                                <td>
+                                    <span class="badge badge-session-type bg-secondary">
+                                        {{ session.get_session_type_display }}
+                                    </span>
+                                </td>
+                                <td>{{ session.session_date|date:"M d, Y H:i" }}</td>
+                                <td>{{ session.laps.count }}</td>
+                                <td>
+                                    {% if session.best_lap %}
+                                    <span class="lap-time fastest">{{ session.best_lap.lap_time|floatformat:3 }}s</span>
+                                    {% else %}
+                                    <span class="text-muted">--</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if session.processing_status == 'completed' %}
+                                    <span class="badge bg-success">Completed</span>
+                                    {% elif session.processing_status == 'processing' %}
+                                    <span class="badge bg-warning processing">Processing</span>
+                                    {% elif session.processing_status == 'failed' %}
+                                    <span class="badge bg-danger">Failed</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'telemetry:session_detail' session.pk %}" class="btn btn-sm btn-outline-primary">
+                                        View <i class="bi bi-arrow-right"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-folder-x text-muted" style="font-size: 3rem;"></i>
+                    <p class="text-muted mt-3">No sessions yet. Upload your first telemetry file to get started!</p>
+                    <a href="{% url 'telemetry:upload' %}" class="btn btn-primary">
+                        <i class="bi bi-upload"></i> Upload Now
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row g-4">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-upload text-primary mb-3" style="font-size: 3rem;"></i>
+                <h5>Upload Telemetry</h5>
+                <p class="text-muted">Upload IBT files from your iRacing sessions</p>
+                <a href="{% url 'telemetry:upload' %}" class="btn btn-primary">
+                    <i class="bi bi-upload"></i> Upload
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-graph-up text-success mb-3" style="font-size: 3rem;"></i>
+                <h5>Analyze Data</h5>
+                <p class="text-muted">Compare laps and analyze your performance</p>
+                <a href="{% url 'telemetry:session_list' %}" class="btn btn-success">
+                    <i class="bi bi-graph-up"></i> Analyze
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body text-center">
+                <i class="bi bi-people text-info mb-3" style="font-size: 3rem;"></i>
+                <h5>Team Collaboration</h5>
+                <p class="text-muted">Share telemetry with your team members</p>
+                <a href="#" class="btn btn-info">
+                    <i class="bi bi-people"></i> Teams
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<!-- Not Authenticated -->
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card bg-gradient">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-speedometer2" style="font-size: 5rem; color: #0d6efd;"></i>
+                <h2 class="mt-4 mb-3">Welcome to Ridgway Garage</h2>
+                <p class="lead text-muted mb-4">
+                    Analyze your iRacing telemetry data, compare laps with teammates,
+                    and improve your performance with advanced insights.
+                </p>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-4">
+                        <div class="p-3">
+                            <i class="bi bi-upload text-primary" style="font-size: 2rem;"></i>
+                            <h6 class="mt-2">Upload Telemetry</h6>
+                            <small class="text-muted">Import IBT files from iRacing</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3">
+                            <i class="bi bi-graph-up text-success" style="font-size: 2rem;"></i>
+                            <h6 class="mt-2">Analyze Data</h6>
+                            <small class="text-muted">Interactive charts and comparisons</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3">
+                            <i class="bi bi-people text-info" style="font-size: 2rem;"></i>
+                            <h6 class="mt-2">Team Features</h6>
+                            <small class="text-muted">Collaborate with teammates</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-3 justify-content-center">
+                    <a href="{% url 'account_signup' %}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-person-plus"></i> Sign Up Free
+                    </a>
+                    <a href="{% url 'account_login' %}" class="btn btn-outline-primary btn-lg">
+                        <i class="bi bi-box-arrow-in-right"></i> Login
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Features List -->
+        <div class="row g-4 mt-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5><i class="bi bi-graph-up-arrow text-primary"></i> Advanced Analytics</h5>
+                        <p class="text-muted mb-0">
+                            Visualize speed, throttle, brake, steering, and 200+ telemetry channels
+                            with interactive Plotly charts.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5><i class="bi bi-map text-success"></i> Track Mapping</h5>
+                        <p class="text-muted mb-0">
+                            GPS-based track visualization showing your racing line and
+                            speed zones on real-world maps.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5><i class="bi bi-arrows-collapse text-warning"></i> Lap Comparison</h5>
+                        <p class="text-muted mb-0">
+                            Compare multiple laps side-by-side with delta analysis to
+                            identify where you can improve.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5><i class="bi bi-broadcast text-info"></i> Real-Time Streaming</h5>
+                        <p class="text-muted mb-0">
+                            Stream live telemetry during sessions and watch team members
+                            race in real-time.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

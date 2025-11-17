@@ -1,0 +1,53 @@
+# Django Core
+Django==5.2.8
+
+# PostgreSQL Database Driver
+psycopg[binary,pool]>=3.1.8
+
+# WebSocket Support
+channels==4.3.1
+channels-redis==4.3.0
+daphne==4.0.0
+
+# Celery for Background Task Processing
+celery==5.4.0
+redis==5.0.1
+django-celery-results==2.5.1
+
+# Authentication & OAuth
+django-allauth==65.3.0
+
+# Telemetry Data Processing
+pyirsdk==1.3.5
+pandas>=2.1.4
+numpy>=1.26.2
+
+# Data Visualization
+plotly==5.24.0
+
+# Map Integration
+django-leaflet==0.30.1
+
+# File Storage (for future S3 migration)
+django-storages[s3]==1.14.6
+boto3>=1.34.0
+
+# Environment Configuration
+python-decouple==3.8
+
+# Form Handling
+django-crispy-forms==2.3
+crispy-bootstrap5==2024.10
+
+# Development Tools (optional but recommended)
+django-debug-toolbar==4.4.6
+ipython>=8.12.0
+
+# Testing
+pytest-django==4.9.0
+pytest-cov>=4.1.0
+
+# Code Quality
+black==24.10.0
+flake8==7.1.1
+isort==5.13.2

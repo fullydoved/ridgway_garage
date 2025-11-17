@@ -1,0 +1,91 @@
+{% extends 'telemetry/base.html' %}
+
+{% block title %}My Analyses{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>My Analyses</h1>
+    <a href="{% url 'telemetry:analysis_create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Create New Analysis
+    </a>
+</div>
+
+{% if analyses %}
+<div class="row">
+    {% for analysis in analyses %}
+    <div class="col-md-6 col-lg-4 mb-4">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">{{ analysis.name }}</h5>
+                {% if analysis.is_public %}
+                <span class="badge bg-success">Public</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if analysis.description %}
+                <p class="card-text text-muted">{{ analysis.description|truncatewords:20 }}</p>
+                {% endif %}
+
+                <div class="mb-2">
+                    <small class="text-muted">
+                        <i class="bi bi-stopwatch"></i> {{ analysis.lap_count }} lap{{ analysis.lap_count|pluralize }}
+                        {% if analysis.fastest_lap %}
+                        <br><i class="bi bi-trophy"></i> Fastest: {{ analysis.fastest_lap.lap_time }}s
+                        {% endif %}
+                    </small>
+                </div>
+
+                {% if analysis.track %}
+                <div class="mb-2">
+                    <small class="text-muted">
+                        <i class="bi bi-geo-alt"></i> {{ analysis.track.name }}
+                    </small>
+                </div>
+                {% endif %}
+
+                {% if analysis.car %}
+                <div class="mb-2">
+                    <small class="text-muted">
+                        <i class="bi bi-car-front"></i> {{ analysis.car.name }}
+                    </small>
+                </div>
+                {% endif %}
+
+                <div class="mt-3">
+                    <small class="text-muted">Updated {{ analysis.updated_at|timesince }} ago</small>
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'telemetry:analysis_detail' analysis.pk %}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-eye"></i> View
+                    </a>
+                    <div>
+                        <a href="{% url 'telemetry:analysis_edit' analysis.pk %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-pencil"></i> Edit
+                        </a>
+                        <form method="post" action="{% url 'telemetry:analysis_delete' analysis.pk %}" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this analysis?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    <strong>No analyses yet.</strong>
+    <p class="mb-0">Create your first analysis to compare laps and find improvements!</p>
+    <a href="{% url 'telemetry:analysis_create' %}" class="btn btn-primary mt-3">
+        <i class="bi bi-plus-circle"></i> Create Your First Analysis
+    </a>
+</div>
+{% endif %}
+
+{% endblock %}

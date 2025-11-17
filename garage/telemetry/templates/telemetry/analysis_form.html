@@ -1,0 +1,146 @@
+{% extends 'telemetry/base.html' %}
+
+{% block title %}{% if analysis %}Edit{% else %}Create{% endif %} Analysis{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% if analysis %}{% url 'telemetry:analysis_detail' analysis.pk %}{% else %}{% url 'telemetry:analysis_list' %}{% endif %}" class="btn btn-outline-secondary mb-3">
+        <i class="bi bi-arrow-left"></i> Back
+    </a>
+    <h1>{% if analysis %}Edit{% else %}Create New{% endif %} Analysis</h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label for="{{ form.name.id_for_label }}" class="form-label">
+                            {{ form.name.label }}
+                            <span class="text-danger">*</span>
+                        </label>
+                        {{ form.name }}
+                        {% if form.name.errors %}
+                        <div class="text-danger small mt-1">{{ form.name.errors }}</div>
+                        {% endif %}
+                        {% if form.name.help_text %}
+                        <div class="form-text">{{ form.name.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.description.id_for_label }}" class="form-label">
+                            {{ form.description.label }}
+                        </label>
+                        {{ form.description }}
+                        {% if form.description.errors %}
+                        <div class="text-danger small mt-1">{{ form.description.errors }}</div>
+                        {% endif %}
+                        {% if form.description.help_text %}
+                        <div class="form-text">{{ form.description.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.track.id_for_label }}" class="form-label">
+                                {{ form.track.label }}
+                            </label>
+                            {{ form.track }}
+                            {% if form.track.errors %}
+                            <div class="text-danger small mt-1">{{ form.track.errors }}</div>
+                            {% endif %}
+                            {% if form.track.help_text %}
+                            <div class="form-text">{{ form.track.help_text }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.car.id_for_label }}" class="form-label">
+                                {{ form.car.label }}
+                            </label>
+                            {{ form.car }}
+                            {% if form.car.errors %}
+                            <div class="text-danger small mt-1">{{ form.car.errors }}</div>
+                            {% endif %}
+                            {% if form.car.help_text %}
+                            <div class="form-text">{{ form.car.help_text }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.team.id_for_label }}" class="form-label">
+                            {{ form.team.label }}
+                        </label>
+                        {{ form.team }}
+                        {% if form.team.errors %}
+                        <div class="text-danger small mt-1">{{ form.team.errors }}</div>
+                        {% endif %}
+                        {% if form.team.help_text %}
+                        <div class="form-text">{{ form.team.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-3 form-check">
+                        {{ form.is_public }}
+                        <label class="form-check-label" for="{{ form.is_public.id_for_label }}">
+                            {{ form.is_public.label }}
+                        </label>
+                        {% if form.is_public.help_text %}
+                        <div class="form-text">{{ form.is_public.help_text }}</div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% if analysis %}{% url 'telemetry:analysis_detail' analysis.pk %}{% else %}{% url 'telemetry:analysis_list' %}{% endif %}" class="btn btn-outline-secondary">
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i>
+                            {% if analysis %}Save Changes{% else %}Create Analysis{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if analysis %}
+        <div class="alert alert-info mt-3">
+            <i class="bi bi-info-circle"></i>
+            <strong>Next step:</strong> After saving, you can add laps to this analysis from your session detail pages.
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> About Analyses</h5>
+            </div>
+            <div class="card-body">
+                <p class="small">Analyses allow you to compare multiple laps to find improvements in your driving.</p>
+
+                <h6 class="mt-3">How it works:</h6>
+                <ol class="small">
+                    <li>Create an analysis with a descriptive name</li>
+                    <li>Add laps from your sessions</li>
+                    <li>View comparison charts to see differences</li>
+                    <li>Identify where you can improve</li>
+                </ol>
+
+                <h6 class="mt-3">Tips:</h6>
+                <ul class="small">
+                    <li>Compare laps from the same track/car for best results</li>
+                    <li>Use descriptive names like "Baseline vs New Setup"</li>
+                    <li>Track and car fields help you filter laps later</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

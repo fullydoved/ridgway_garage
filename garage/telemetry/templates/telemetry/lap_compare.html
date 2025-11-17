@@ -1,0 +1,28 @@
+{% extends 'telemetry/base.html' %}
+
+{% block title %}Compare Laps - Ridgway Garage{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1><i class="bi bi-arrows-collapse"></i> Lap Comparison</h1>
+        <p class="text-muted">Comparing {{ laps.count }} laps</p>
+
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            Lap comparison visualization coming soon!
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h5>Selected Laps:</h5>
+                <ul>
+                    {% for lap in laps %}
+                    <li>Lap {{ lap.lap_number }}: {{ lap.lap_time|floatformat:3 }}s ({{ lap.session.track.name }})</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

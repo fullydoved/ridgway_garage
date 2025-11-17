@@ -1,0 +1,436 @@
+# Ridgway Garage - iRacing Telemetry Analysis Platform
+
+A comprehensive web application for analyzing iRacing telemetry data, comparing laps, and improving your racing performance.
+
+## Features
+
+- 📊 **Telemetry Visualization** - Interactive charts showing speed, throttle, brake, steering, RPM, and tire temperatures
+- 🗺️ **GPS Track Maps** - Visual representation of your racing line with speed overlays
+- 🔄 **Lap Comparison** - Compare multiple laps side-by-side with overlay charts and track maps
+- 📈 **Analysis System** - Create named analyses (like Garage 61) to save and revisit lap comparisons
+- 🏆 **Personal Best Tracking** - Automatically identify and highlight your best laps
+- 👥 **Team Collaboration** - Share analyses with team members
+- 🔐 **Authentication** - Secure login with Discord OAuth integration
+
+## Tech Stack
+
+- **Backend**: Django 5.2.8, Python 3.12
+- **Database**: PostgreSQL 16 with connection pooling
+- **Cache/Queue**: Redis 7
+- **Task Queue**: Celery for background processing
+- **WebSockets**: Django Channels for real-time updates
+- **Visualization**: Plotly.js, Leaflet.js
+- **Deployment**: Docker & Docker Compose
+
+---
+
+## Quick Start with Docker (Recommended)
+
+This is the easiest way to get Ridgway Garage running on your machine.
+
+### Prerequisites
+
+1. **Docker Desktop** for Windows 11
+   - Download from: https://www.docker.com/products/docker-desktop
+   - Install and restart your computer
+   - Ensure WSL 2 is enabled (Docker Desktop will prompt you)
+
+2. **Git** for Windows
+   - Download from: https://git-scm.com/download/win
+   - Install with default settings
+
+### Installation Steps
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/ridgway_garage.git
+   cd ridgway_garage
+   ```
+
+2. **Create environment file**
+   ```bash
+   copy .env.example .env
+   ```
+
+   Open `.env` in a text editor and update the `SECRET_KEY`:
+   ```
+   SECRET_KEY=your-random-secret-key-here
+   ```
+
+   To generate a secure secret key, you can use Python:
+   ```bash
+   python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+   ```
+
+3. **Start the application**
+   ```bash
+   docker compose up -d
+   ```
+
+   This will:
+   - Download and build all required containers
+   - Set up PostgreSQL database
+   - Set up Redis for caching and background tasks
+   - Run database migrations
+   - Create a default admin user
+   - Start the Django web server
+   - Start Celery workers for background processing
+
+4. **Access the application**
+   - Open your browser and go to: http://localhost:8000
+   - Login with default credentials:
+     - **Username**: `admin`
+     - **Password**: `admin`
+   - **IMPORTANT**: Change the admin password after first login!
+
+5. **Stop the application**
+   ```bash
+   docker compose down
+   ```
+
+6. **View logs**
+   ```bash
+   docker compose logs -f web
+   docker compose logs -f celery_worker
+   ```
+
+---
+
+## Manual Installation (Advanced)
+
+If you prefer not to use Docker, you can install manually.
+
+### Prerequisites
+
+- Python 3.12+
+- PostgreSQL 16+
+- Redis 7+
+- Git
+
+### Windows 11 Manual Installation
+
+1. **Install Python 3.12**
+   - Download from: https://www.python.org/downloads/
+   - During installation, check "Add Python to PATH"
+
+2. **Install PostgreSQL**
+   - Download from: https://www.postgresql.org/download/windows/
+   - Remember the password you set for the `postgres` user
+
+3. **Install Redis**
+   - Download from: https://github.com/tporadowski/redis/releases
+   - Extract and run `redis-server.exe`
+
+4. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/ridgway_garage.git
+   cd ridgway_garage
+   ```
+
+5. **Create virtual environment**
+   ```bash
+   python -m venv venv
+   venv\Scripts\activate
+   ```
+
+6. **Install dependencies**
+   ```bash
+   cd garage
+   pip install -r requirements.txt
+   ```
+
+7. **Configure environment**
+   ```bash
+   copy .env.example .env
+   ```
+
+   Edit `.env` and update database credentials:
+   ```
+   DB_NAME=ridgway_garage
+   DB_USER=postgres
+   DB_PASSWORD=your_postgres_password
+   DB_HOST=localhost
+   DB_PORT=5432
+   REDIS_URL=redis://localhost:6379/0
+   ```
+
+8. **Create database**
+   Open pgAdmin or psql and create the database:
+   ```sql
+   CREATE DATABASE ridgway_garage;
+   ```
+
+9. **Run migrations**
+   ```bash
+   python manage.py migrate
+   ```
+
+10. **Create superuser**
+    ```bash
+    python manage.py createsuperuser
+    ```
+
+11. **Collect static files**
+    ```bash
+    python manage.py collectstatic
+    ```
+
+12. **Start the development server** (in separate terminals)
+
+    Terminal 1 - Django:
+    ```bash
+    python manage.py runserver
+    ```
+
+    Terminal 2 - Celery Worker:
+    ```bash
+    celery -A garage worker -l info
+    ```
+
+    Terminal 3 - Daphne (for WebSockets, optional):
+    ```bash
+    daphne -p 8001 garage.asgi:application
+    ```
+
+---
+
+## Usage Guide
+
+### Uploading Telemetry
+
+1. Go to **Upload** in the navigation menu
+2. Select your `.ibt` file from iRacing
+3. The system will automatically:
+   - Parse the telemetry data
+   - Identify the track and car
+   - Segment laps
+   - Calculate lap times
+   - Mark personal bests
+
+### Viewing Sessions
+
+1. Go to **My Sessions**
+2. Click on any session to see all laps
+3. Click **View** on any lap to see detailed telemetry charts and GPS track map
+
+### Creating Analyses (Lap Comparisons)
+
+1. Go to **Analyses** → **Create New Analysis**
+2. Give it a descriptive name (e.g., "Baseline vs New Setup")
+3. Navigate to any lap in **My Sessions**
+4. Click **Add to Analysis** dropdown
+5. Select the analysis you created
+6. Repeat for additional laps you want to compare
+7. Go to **Analyses** → Click on your analysis
+8. View the overlay charts and track map showing all laps
+
+### Features in Analysis View
+
+- **Track Overlay Map**: Shows all laps color-coded on the same track
+  - Toggle "Show Map Background" to show/hide OpenStreetMap tiles
+  - Click any racing line to see lap details
+- **Comparison Charts**: Speed, throttle/brake, steering, RPM, and tire temperatures
+  - All charts are synchronized - hover to see values across all laps
+  - Each lap has a unique color for easy identification
+- **Lap List**: Shows all laps in the analysis with lap times and session info
+
+---
+
+## Project Structure
+
+```
+ridgway_garage/
+├── garage/                    # Django project root
+│   ├── garage/               # Django settings and config
+│   │   ├── settings.py       # Main settings
+│   │   ├── urls.py           # URL routing
+│   │   ├── asgi.py           # ASGI config (WebSockets)
+│   │   └── celery.py         # Celery configuration
+│   ├── telemetry/            # Main Django app
+│   │   ├── models.py         # Database models
+│   │   ├── views.py          # View logic
+│   │   ├── forms.py          # Django forms
+│   │   ├── tasks.py          # Celery background tasks
+│   │   ├── utils/            # Utility modules
+│   │   │   ├── ibt_parser.py # IBT file parsing
+│   │   │   └── charts.py     # Plotly chart generation
+│   │   ├── templates/        # HTML templates
+│   │   └── static/           # CSS, JS, images
+│   ├── media/                # User uploads (IBT files)
+│   ├── staticfiles/          # Collected static files
+│   ├── manage.py             # Django management script
+│   └── requirements.txt      # Python dependencies
+├── docker-compose.yml        # Docker services configuration
+├── Dockerfile                # Docker image build instructions
+├── docker-entrypoint.sh      # Container startup script
+├── .env.example              # Example environment variables
+└── README.md                 # This file
+```
+
+---
+
+## Docker Services
+
+The `docker-compose.yml` defines the following services:
+
+- **db** - PostgreSQL 16 database
+- **redis** - Redis 7 for caching and message broker
+- **web** - Django application (Daphne ASGI server)
+- **celery_worker** - Background task processor
+- **celery_beat** - Scheduled task scheduler
+
+All services are connected via a private network and data is persisted in Docker volumes.
+
+---
+
+## Configuration
+
+### Environment Variables
+
+Key environment variables in `.env`:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SECRET_KEY` | Django secret key (required) | - |
+| `DEBUG` | Debug mode (True/False) | `True` |
+| `ALLOWED_HOSTS` | Comma-separated allowed hosts | `localhost,127.0.0.1` |
+| `DB_NAME` | PostgreSQL database name | `ridgway_garage` |
+| `DB_USER` | PostgreSQL username | `postgres` |
+| `DB_PASSWORD` | PostgreSQL password | `postgres` |
+| `DB_HOST` | PostgreSQL host | `db` (Docker) / `localhost` |
+| `REDIS_URL` | Redis connection URL | `redis://redis:6379/0` |
+| `DISCORD_CLIENT_ID` | Discord OAuth client ID (optional) | - |
+| `DISCORD_CLIENT_SECRET` | Discord OAuth secret (optional) | - |
+
+---
+
+## Troubleshooting
+
+### Docker Issues
+
+**Docker permission denied (Linux/WSL)**
+
+If you see "permission denied" when running Docker commands:
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+```
+
+Then log out and log back in, or restart your computer.
+
+**Container won't start**
+```bash
+docker compose down -v
+docker compose up -d --build
+```
+
+**Database connection errors**
+```bash
+docker compose logs db
+```
+
+**View all logs**
+```bash
+docker compose logs -f
+```
+
+### Port Already in Use
+
+If port 8000 is already in use, edit `docker-compose.yml`:
+```yaml
+web:
+  ports:
+    - "8001:8000"  # Change host port to 8001
+```
+
+### Celery Tasks Not Running
+
+Check Celery worker logs:
+```bash
+docker compose logs -f celery_worker
+```
+
+Restart Celery worker:
+```bash
+docker compose restart celery_worker
+```
+
+---
+
+## Development
+
+### Running Tests
+
+```bash
+docker compose exec web python manage.py test
+```
+
+Or with pytest:
+```bash
+docker compose exec web pytest
+```
+
+### Creating Migrations
+
+```bash
+docker compose exec web python manage.py makemigrations
+docker compose exec web python manage.py migrate
+```
+
+### Accessing Django Shell
+
+```bash
+docker compose exec web python manage.py shell
+```
+
+### Accessing Database
+
+```bash
+docker compose exec db psql -U postgres ridgway_garage
+```
+
+---
+
+## Production Deployment
+
+For production deployment, you should:
+
+1. Set `DEBUG=False` in `.env`
+2. Generate a strong `SECRET_KEY`
+3. Update `ALLOWED_HOSTS` with your domain
+4. Use a production-grade database (managed PostgreSQL)
+5. Configure email settings for user notifications
+6. Set up SSL/TLS with a reverse proxy (nginx)
+7. Configure S3 for media file storage
+8. Set up monitoring and logging
+9. Use environment-specific `.env` files
+10. Enable database backups
+
+---
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
+
+## License
+
+This project is licensed under the MIT License.
+
+---
+
+## Support
+
+For issues, questions, or suggestions:
+- Open an issue on GitHub
+- Contact the development team
+
+---
+
+## Acknowledgments
+
+- Built with Django, Celery, and Channels
+- Uses pyirsdk for iRacing telemetry parsing
+- Visualization powered by Plotly.js and Leaflet.js
+- Inspired by Garage 61 and other telemetry analysis platforms

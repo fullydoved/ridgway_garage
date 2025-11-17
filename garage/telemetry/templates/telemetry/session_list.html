@@ -1,0 +1,142 @@
+{% extends 'telemetry/base.html' %}
+
+{% block title %}My Sessions - Ridgway Garage{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="bi bi-folder"></i> My Sessions</h1>
+            <a href="{% url 'telemetry:upload' %}" class="btn btn-primary">
+                <i class="bi bi-upload"></i> Upload New
+            </a>
+        </div>
+
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Track</label>
+                        <select name="track" class="form-select">
+                            <option value="">All Tracks</option>
+                            {% for track in tracks %}
+                            <option value="{{ track.id }}" {% if current_track == track.id|stringformat:"s" %}selected{% endif %}>
+                                {{ track.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Car</label>
+                        <select name="car" class="form-select">
+                            <option value="">All Cars</option>
+                            {% for car in cars %}
+                            <option value="{{ car.id }}" {% if current_car == car.id|stringformat:"s" %}selected{% endif %}>
+                                {{ car.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-select">
+                            <option value="">All Status</option>
+                            <option value="completed" {% if current_status == "completed" %}selected{% endif %}>Completed</option>
+                            <option value="processing" {% if current_status == "processing" %}selected{% endif %}>Processing</option>
+                            <option value="failed" {% if current_status == "failed" %}selected{% endif %}>Failed</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-funnel"></i> Apply Filters
+                        </button>
+                        <a href="{% url 'telemetry:session_list' %}" class="btn btn-outline-secondary">
+                            Clear
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Sessions -->
+        {% if sessions %}
+        <div class="row g-3">
+            {% for session in sessions %}
+            <div class="col-12">
+                <div class="card session-card {{ session.processing_status }}">
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <h5 class="mb-2">
+                                    {% if session.track %}
+                                        {{ session.track.name }}
+                                    {% else %}
+                                        <span class="text-muted">Detecting track...</span>
+                                    {% endif %}
+                                </h5>
+                                <p class="text-muted mb-2">
+                                    <i class="bi bi-car-front"></i>
+                                    {% if session.car %}
+                                        {{ session.car.name }}
+                                    {% else %}
+                                        Detecting car...
+                                    {% endif %}
+                                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                                    <i class="bi bi-calendar"></i> {{ session.session_date|date:"M d, Y H:i" }}
+                                </p>
+                                <span class="badge bg-secondary">{{ session.get_session_type_display }}</span>
+                                {% if session.team %}
+                                <span class="badge bg-info"><i class="bi bi-people"></i> {{ session.team.name }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-muted small">Laps: {{ session.laps.count }}</div>
+                                {% if session.laps.count > 0 %}
+                                <div>
+                                    Best: <span class="lap-time">
+                                        {% with best=session.laps.all|dictsort:"lap_time"|first %}
+                                            {{ best.lap_time|floatformat:3 }}s
+                                        {% endwith %}
+                                    </span>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-3 text-end">
+                                {% if session.processing_status == 'completed' %}
+                                <span class="badge bg-success mb-2">Completed</span>
+                                <br>
+                                <a href="{% url 'telemetry:session_detail' session.pk %}" class="btn btn-sm btn-primary">
+                                    View Details <i class="bi bi-arrow-right"></i>
+                                </a>
+                                {% elif session.processing_status == 'processing' %}
+                                <span class="badge bg-warning processing">Processing...</span>
+                                {% elif session.processing_status == 'failed' %}
+                                <span class="badge bg-danger">Failed</span>
+                                <br>
+                                <small class="text-danger">{{ session.processing_error|truncatewords:10 }}</small>
+                                {% else %}
+                                <span class="badge bg-secondary">Pending</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-folder-x text-muted" style="font-size: 4rem;"></i>
+                <h4 class="mt-4">No sessions found</h4>
+                <p class="text-muted">Upload your first telemetry file to get started!</p>
+                <a href="{% url 'telemetry:upload' %}" class="btn btn-primary">
+                    <i class="bi bi-upload"></i> Upload Telemetry
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

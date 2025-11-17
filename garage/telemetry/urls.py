@@ -1,0 +1,34 @@
+"""
+URL configuration for the telemetry app.
+"""
+
+from django.urls import path
+from . import views
+
+app_name = 'telemetry'
+
+urlpatterns = [
+    # Home/Dashboard
+    path('', views.home, name='home'),
+
+    # Session management
+    path('sessions/', views.session_list, name='session_list'),
+    path('sessions/<int:pk>/', views.session_detail, name='session_detail'),
+    path('sessions/<int:pk>/delete/', views.session_delete, name='session_delete'),
+
+    # Upload
+    path('upload/', views.upload, name='upload'),
+
+    # Lap views
+    path('laps/<int:pk>/', views.lap_detail, name='lap_detail'),
+    path('compare/', views.lap_compare, name='lap_compare'),
+
+    # Analysis (lap comparison)
+    path('analyses/', views.analysis_list, name='analysis_list'),
+    path('analyses/create/', views.analysis_create, name='analysis_create'),
+    path('analyses/<int:pk>/', views.analysis_detail, name='analysis_detail'),
+    path('analyses/<int:pk>/edit/', views.analysis_edit, name='analysis_edit'),
+    path('analyses/<int:pk>/delete/', views.analysis_delete, name='analysis_delete'),
+    path('analyses/<int:pk>/add-lap/<int:lap_id>/', views.analysis_add_lap, name='analysis_add_lap'),
+    path('analyses/<int:pk>/remove-lap/<int:lap_id>/', views.analysis_remove_lap, name='analysis_remove_lap'),
+]

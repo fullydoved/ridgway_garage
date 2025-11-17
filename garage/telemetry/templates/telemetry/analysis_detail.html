@@ -1,0 +1,283 @@
+{% extends 'telemetry/base.html' %}
+
+{% block title %}{{ analysis.name }}{% endblock %}
+
+{% block extra_css %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""/>
+<style>
+    #comparison-track-map {
+        height: 400px;
+        width: 100%;
+        border-radius: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="mb-4">
+    <a href="{% url 'telemetry:analysis_list' %}" class="btn btn-outline-secondary mb-3">
+        <i class="bi bi-arrow-left"></i> Back to Analyses
+    </a>
+
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <h1>{{ analysis.name }}</h1>
+            {% if analysis.description %}
+            <p class="text-muted">{{ analysis.description }}</p>
+            {% endif %}
+            <div class="mb-2">
+                {% if analysis.track %}
+                <span class="badge bg-secondary"><i class="bi bi-geo-alt"></i> {{ analysis.track.name }}</span>
+                {% endif %}
+                {% if analysis.car %}
+                <span class="badge bg-secondary"><i class="bi bi-car-front"></i> {{ analysis.car.name }}</span>
+                {% endif %}
+                {% if analysis.is_public %}
+                <span class="badge bg-success">Public</span>
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <a href="{% url 'telemetry:analysis_edit' analysis.pk %}" class="btn btn-outline-primary">
+                <i class="bi bi-pencil"></i> Edit
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Laps in Analysis -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-list-check"></i> Laps in this Analysis ({{ laps.count }})</h5>
+        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addLapModal">
+            <i class="bi bi-plus-circle"></i> Add Lap
+        </button>
+    </div>
+    <div class="card-body">
+        {% if laps %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Session</th>
+                        <th>Lap Number</th>
+                        <th>Lap Time</th>
+                        <th>Track</th>
+                        <th>Car</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for lap in laps %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>
+                            <a href="{% url 'telemetry:session_detail' lap.session.pk %}">
+                                {{ lap.session.session_date|date:"Y-m-d" }}
+                            </a>
+                        </td>
+                        <td>Lap {{ lap.lap_number }}</td>
+                        <td>
+                            <strong>{{ lap.lap_time }}s</strong>
+                            {% if lap.is_personal_best %}
+                            <span class="badge bg-warning text-dark">
+                                <i class="bi bi-trophy-fill"></i> PB
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td>{{ lap.session.track.name|default:"Unknown" }}</td>
+                        <td>{{ lap.session.car.name|default:"Unknown" }}</td>
+                        <td>
+                            <a href="{% url 'telemetry:lap_detail' lap.pk %}" class="btn btn-sm btn-outline-primary" title="View Lap">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <form method="post" action="{% url 'telemetry:analysis_remove_lap' analysis.pk lap.pk %}" class="d-inline" onsubmit="return confirm('Remove this lap from the analysis?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove from Analysis">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            <strong>No laps added yet.</strong>
+            <p class="mb-0">Click "Add Lap" above to start adding laps to this analysis.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Track Overlay Map -->
+{% if comparison_gps_data %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-map"></i> Track Overlay</h5>
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="toggleMapBackground">
+            <label class="form-check-label" for="toggleMapBackground">
+                Show Map Background
+            </label>
+        </div>
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-3">
+            <i class="bi bi-info-circle"></i>
+            Track overlay showing racing lines for all laps. Each lap is color-coded to match the comparison charts below.
+        </p>
+        <div id="comparison-track-map"></div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Comparison Charts -->
+{% if comparison_chart %}
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-graph-up"></i> Lap Comparison</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-3">
+            <i class="bi bi-info-circle"></i>
+            Comparing {{ laps.count }} laps. Hover over the charts to see detailed values. Use the legend to identify each lap.
+        </p>
+        {{ comparison_chart|safe }}
+    </div>
+</div>
+{% elif laps.count == 1 %}
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>Add at least one more lap to see comparisons.</strong>
+    <p class="mb-0">You need at least 2 laps to generate comparison charts.</p>
+</div>
+{% elif laps.count == 0 %}
+<!-- Already shown in the "No laps added yet" alert above -->
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-exclamation-triangle"></i>
+    <strong>Not enough telemetry data to generate comparison charts.</strong>
+    <p class="mb-0">Make sure the laps you've added have telemetry data available.</p>
+</div>
+{% endif %}
+
+<!-- Modal for Adding Laps -->
+<div class="modal fade" id="addLapModal" tabindex="-1" aria-labelledby="addLapModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addLapModalLabel">Add Lap to Analysis</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted">Go to a session detail page and click "Add to Analysis" next to any lap.</p>
+                <a href="{% url 'telemetry:session_list' %}" class="btn btn-primary">
+                    <i class="bi bi-list"></i> Browse Sessions
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+{% if comparison_gps_data %}
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""></script>
+
+<script>
+    // Initialize the map for comparison track overlay
+    const comparisonGpsData = {{ comparison_gps_data|safe }};
+
+    if (comparisonGpsData && comparisonGpsData.length > 0) {
+        // Get center point from first lap
+        const firstLap = comparisonGpsData[0];
+        const centerLat = firstLap.coordinates[Math.floor(firstLap.coordinates.length / 2)][0];
+        const centerLon = firstLap.coordinates[Math.floor(firstLap.coordinates.length / 2)][1];
+
+        // Create map with dark background
+        const comparisonMap = L.map('comparison-track-map', {
+            preferCanvas: true,
+            zoomControl: true
+        }).setView([centerLat, centerLon], 15);
+
+        // Set dark background color for map container
+        document.getElementById('comparison-track-map').style.backgroundColor = '#1a1a1a';
+
+        // Create OpenStreetMap tile layer (but don't add it by default)
+        const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        });
+
+        // Toggle map background based on checkbox
+        const toggleCheckbox = document.getElementById('toggleMapBackground');
+        toggleCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                tileLayer.addTo(comparisonMap);
+            } else {
+                comparisonMap.removeLayer(tileLayer);
+            }
+        });
+
+        // Add polylines for each lap
+        comparisonGpsData.forEach((lapData, index) => {
+            const polyline = L.polyline(lapData.coordinates, {
+                color: lapData.color,
+                weight: 4,
+                opacity: 0.9
+            }).addTo(comparisonMap);
+
+            // Add popup with lap info
+            polyline.bindPopup(`
+                <strong>Lap ${lapData.lap_number}</strong><br>
+                Lap Time: ${lapData.lap_time.toFixed(3)}s
+            `);
+
+            // Fit map to show all laps
+            if (index === 0) {
+                comparisonMap.fitBounds(polyline.getBounds());
+            } else {
+                comparisonMap.fitBounds(comparisonMap.getBounds().extend(polyline.getBounds()));
+            }
+        });
+
+        // Add legend to identify laps by color
+        const legend = L.control({ position: 'topright' });
+        legend.onAdd = function(map) {
+            const div = L.DomUtil.create('div', 'info legend');
+            div.style.background = 'rgba(0, 0, 0, 0.8)';
+            div.style.padding = '10px';
+            div.style.borderRadius = '8px';
+            div.style.color = 'white';
+
+            let html = '<strong>Laps</strong><br>';
+            comparisonGpsData.forEach(lapData => {
+                html += `
+                    <div style="margin: 5px 0;">
+                        <span style="display: inline-block; width: 20px; height: 3px; background: ${lapData.color}; margin-right: 8px;"></span>
+                        Lap ${lapData.lap_number} (${lapData.lap_time.toFixed(3)}s)
+                    </div>
+                `;
+            });
+
+            div.innerHTML = html;
+            return div;
+        };
+        legend.addTo(comparisonMap);
+    }
+</script>
+{% endif %}
+{% endblock %}

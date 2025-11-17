@@ -1,0 +1,116 @@
+{% extends 'telemetry/base.html' %}
+
+{% block title %}{{ session.track.name }} - Session Detail{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <a href="{% url 'telemetry:session_list' %}" class="btn btn-outline-secondary mb-3">
+            <i class="bi bi-arrow-left"></i> Back to Sessions
+        </a>
+
+        <h1>{% if session.track %}{{ session.track.name }}{% else %}Processing...{% endif %}</h1>
+        <p class="text-muted">
+            {% if session.car %}{{ session.car.name }}{% else %}Detecting car...{% endif %} | {{ session.session_date|date:"M d, Y H:i" }}
+        </p>
+
+        {% if session.processing_status != 'completed' %}
+        <div class="alert alert-warning">
+            <i class="bi bi-hourglass-split"></i>
+            This session is currently being processed. Telemetry data will be available soon.
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-header bg-dark">
+                <h5 class="mb-0">Laps ({{ laps.count }})</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Lap</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                                <th>In Analyses</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for lap in laps %}
+                            <tr>
+                                <td>{{ lap.lap_number }}</td>
+                                <td>
+                                    <span class="lap-time {% if lap.is_valid %}valid{% else %}invalid{% endif %}">
+                                        {{ lap.lap_time|floatformat:3 }}s
+                                    </span>
+                                    {% if lap.is_personal_best %}
+                                    <span class="badge bg-warning text-dark ms-1">
+                                        <i class="bi bi-trophy-fill"></i> PB
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if lap.is_valid %}
+                                    <span class="badge bg-success">Valid</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Invalid</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if lap.user_analyses %}
+                                        {% for analysis in lap.user_analyses %}
+                                        <a href="{% url 'telemetry:analysis_detail' analysis.pk %}" class="badge bg-secondary text-decoration-none me-1" title="View analysis">
+                                            {{ analysis.name }}
+                                        </a>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted small">None</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'telemetry:lap_detail' lap.pk %}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+
+                                    {% if user_analyses %}
+                                    <div class="btn-group" role="group">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                            <i class="bi bi-plus-circle"></i> Add to Analysis
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            {% for analysis in user_analyses %}
+                                            <li>
+                                                <form method="post" action="{% url 'telemetry:analysis_add_lap' analysis.pk lap.pk %}" class="d-inline">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="dropdown-item">
+                                                        {{ analysis.name }}
+                                                    </button>
+                                                </form>
+                                            </li>
+                                            {% endfor %}
+                                            <li><hr class="dropdown-divider"></li>
+                                            <li>
+                                                <a class="dropdown-item" href="{% url 'telemetry:analysis_create' %}">
+                                                    <i class="bi bi-plus"></i> Create New Analysis
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    {% else %}
+                                    <a href="{% url 'telemetry:analysis_create' %}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-plus-circle"></i> Create Analysis
+                                    </a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

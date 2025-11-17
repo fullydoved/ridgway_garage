@@ -1,0 +1,458 @@
+{% extends 'telemetry/base.html' %}
+
+{% block title %}Lap {{ lap.lap_number }} - {{ session.track.name }}{% endblock %}
+
+{% block main_class %}container-fluid my-4{% endblock %}
+
+{% block extra_css %}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""/>
+<style>
+    /* Map at top - fixed */
+    .map-container-top {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: #1a1a1a;
+        padding: 0 2rem;
+    }
+
+    .map-container-top .card {
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+        margin-bottom: 0;
+    }
+
+    #track-map {
+        height: 350px;
+        width: 100%;
+        border-radius: 0 0 8px 8px;
+    }
+
+    /* Push charts below fixed map */
+    .charts-scroll-container {
+        margin-top: 420px; /* Height of map + header + padding */
+    }
+
+    .lap-stats {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    .stat-item {
+        text-align: center;
+        padding: 10px;
+    }
+    .stat-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #00d4ff;
+    }
+    .stat-label {
+        font-size: 0.9rem;
+        color: #aaa;
+        text-transform: uppercase;
+    }
+    .chart-container {
+        background: rgba(255, 255, 255, 0.02);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .zoom-hint {
+        background: rgba(0, 212, 255, 0.1);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+
+    .zoom-hint i {
+        color: #00d4ff;
+        font-size: 1.2rem;
+        margin-right: 8px;
+    }
+
+    /* Adjust padding for full-width layout */
+    @media (min-width: 992px) {
+        .container-fluid {
+            padding-left: 2rem;
+            padding-right: 2rem;
+        }
+    }
+
+    /* Charts take full width below map */
+    .chart-container {
+        width: 100%;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="{% url 'telemetry:session_detail' session.pk %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to Session
+            </a>
+
+            {% if user_analyses %}
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-plus-circle"></i> Add to Analysis
+                </button>
+                <ul class="dropdown-menu">
+                    {% for analysis in user_analyses %}
+                    <li>
+                        <form method="post" action="{% url 'telemetry:analysis_add_lap' analysis.pk lap.pk %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="dropdown-item">
+                                {{ analysis.name }}
+                            </button>
+                        </form>
+                    </li>
+                    {% endfor %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <a class="dropdown-item" href="{% url 'telemetry:analysis_create' %}">
+                            <i class="bi bi-plus"></i> Create New Analysis
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            {% else %}
+            <a href="{% url 'telemetry:analysis_create' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Create Analysis
+            </a>
+            {% endif %}
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1>
+                    Lap {{ lap.lap_number }}
+                    {% if lap.is_personal_best %}
+                    <span class="badge bg-warning text-dark">
+                        <i class="bi bi-trophy-fill"></i> Personal Best
+                    </span>
+                    {% endif %}
+                </h1>
+                <p class="text-muted mb-0">
+                    {% if session.track %}{{ session.track.name }}{% else %}Unknown Track{% endif %}
+                    |
+                    {% if session.car %}{{ session.car.name }}{% else %}Unknown Car{% endif %}
+                </p>
+            </div>
+            <div class="text-end">
+                <div class="stat-value">{{ lap.lap_time|floatformat:3 }}s</div>
+                <div class="stat-label">Lap Time</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if not telemetry %}
+<div class="row">
+    <div class="col-12">
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            Telemetry data is not available for this lap yet.
+        </div>
+    </div>
+</div>
+{% else %}
+
+<!-- Track Map at Top (Fixed) -->
+{% if gps_data_json %}
+<div class="map-container-top">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0 d-inline">
+                    <i class="bi bi-geo-alt"></i> Track Map
+                </h5>
+                <small class="text-muted ms-3">Lap {{ lap.lap_number }} - {{ lap.lap_time|floatformat:3 }}s</small>
+            </div>
+            <small class="text-muted">Yellow marker follows your cursor</small>
+        </div>
+        <div class="card-body p-0">
+            <div id="track-map"></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Charts Below (Scrollable) -->
+<div class="charts-scroll-container">
+    <!-- Lap Statistics -->
+    <div class="row">
+        <div class="col-12">
+            <div class="lap-stats">
+                <div class="row">
+                    <div class="col-md-3 stat-item">
+                        <div class="stat-value">{{ telemetry.max_speed|floatformat:1 }}</div>
+                        <div class="stat-label">Max Speed (km/h)</div>
+                    </div>
+                    <div class="col-md-3 stat-item">
+                        <div class="stat-value">{{ telemetry.avg_speed|floatformat:1 }}</div>
+                        <div class="stat-label">Avg Speed (km/h)</div>
+                    </div>
+                    <div class="col-md-3 stat-item">
+                        <div class="stat-value">{{ telemetry.sample_count|floatformat:0 }}</div>
+                        <div class="stat-label">Data Samples</div>
+                    </div>
+                    <div class="col-md-3 stat-item">
+                        <div class="stat-value">{{ lap.lap_time|floatformat:3 }}s</div>
+                        <div class="stat-label">Lap Time</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zoom Hint -->
+    <div class="row">
+        <div class="col-12">
+            <div class="zoom-hint">
+                <i class="bi bi-zoom-in"></i>
+                <strong>Tip:</strong> Drag to select a section on any chart to zoom all charts together automatically.
+                Double-click to reset. Hover over charts to see position on track map!
+            </div>
+        </div>
+    </div>
+
+    <!-- Combined Telemetry Chart -->
+    <div class="row">
+        <div class="col-12">
+            {% if combined_chart %}
+            <div class="chart-container">
+                {{ combined_chart|safe }}
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i>
+                No telemetry channels available for visualization.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<!-- Plotly.js -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
+
+<!-- Leaflet.js -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""></script>
+
+<script>
+// Global variables for map and GPS tracking
+let trackMap = null;
+let positionMarker = null;
+let gpsData = null;
+
+// Update position marker on map based on hover distance
+function updateMapPosition(distance) {
+    if (!trackMap || !positionMarker || !gpsData || !gpsData.distances) return;
+
+    // Find the closest GPS point to the hover distance
+    let closestIndex = 0;
+    let minDiff = Infinity;
+
+    for (let i = 0; i < gpsData.distances.length; i++) {
+        const diff = Math.abs(gpsData.distances[i] - distance);
+        if (diff < minDiff) {
+            minDiff = diff;
+            closestIndex = i;
+        }
+    }
+
+    // Update marker position
+    if (closestIndex < gpsData.coordinates.length) {
+        const coord = gpsData.coordinates[closestIndex];
+        const speed = gpsData.speeds[closestIndex];
+        positionMarker.setLatLng(coord);
+        positionMarker.setPopupContent(`
+            <b>Current Position</b><br>
+            Distance: ${distance.toFixed(0)}m<br>
+            Speed: ${speed.toFixed(1)} km/h
+        `);
+        positionMarker.openPopup();
+    }
+}
+
+// Attach event listeners to the combined chart
+function attachChartListeners() {
+    const chartDiv = document.getElementById('combined-telemetry-chart');
+    if (!chartDiv) {
+        console.log('Combined chart not found');
+        return;
+    }
+
+    // Check if chart is initialized
+    if (!chartDiv.data || !chartDiv.layout) {
+        console.log('Combined chart not initialized yet');
+        return;
+    }
+
+    console.log('Attaching listeners to combined telemetry chart');
+
+    // Update map position on hover
+    chartDiv.on('plotly_hover', function(eventData) {
+        if (eventData.points && eventData.points[0]) {
+            const distance = eventData.points[0].x;
+            updateMapPosition(distance);
+        }
+    });
+
+    // Hide popup when not hovering
+    chartDiv.on('plotly_unhover', function() {
+        if (positionMarker) {
+            positionMarker.closePopup();
+        }
+    });
+}
+</script>
+
+{% if gps_data_json %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Parse GPS data from Django
+    gpsData = {{ gps_data_json|safe }};
+
+    if (!gpsData || !gpsData.coordinates || gpsData.coordinates.length === 0) {
+        console.error('No GPS data available');
+        return;
+    }
+
+    // Calculate center of the track
+    const lats = gpsData.coordinates.map(c => c[0]);
+    const lons = gpsData.coordinates.map(c => c[1]);
+    const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+    const centerLon = (Math.min(...lons) + Math.max(...lons)) / 2;
+
+    // Initialize the map and store in global variable
+    trackMap = L.map('track-map').setView([centerLat, centerLon], 16);
+
+    // Add OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    }).addTo(trackMap);
+
+    // Calculate speed color (gradient from red=slow to green=fast)
+    function getSpeedColor(speed, minSpeed, maxSpeed) {
+        const normalized = (speed - minSpeed) / (maxSpeed - minSpeed);
+
+        if (normalized < 0.33) {
+            // Red to yellow (slow)
+            const r = 255;
+            const g = Math.floor(normalized * 3 * 255);
+            return `rgb(${r}, ${g}, 0)`;
+        } else if (normalized < 0.66) {
+            // Yellow to green (medium)
+            const r = Math.floor((1 - (normalized - 0.33) * 3) * 255);
+            const g = 255;
+            return `rgb(${r}, ${g}, 0)`;
+        } else {
+            // Green to cyan (fast)
+            const g = 255;
+            const b = Math.floor((normalized - 0.66) * 3 * 255);
+            return `rgb(0, ${g}, ${b})`;
+        }
+    }
+
+    // Find min and max speeds
+    const speeds = gpsData.speeds;
+    const minSpeed = Math.min(...speeds);
+    const maxSpeed = Math.max(...speeds);
+
+    // Draw the racing line with color-coded segments
+    for (let i = 0; i < gpsData.coordinates.length - 1; i++) {
+        const start = gpsData.coordinates[i];
+        const end = gpsData.coordinates[i + 1];
+        const speed = speeds[i];
+        const color = getSpeedColor(speed, minSpeed, maxSpeed);
+
+        L.polyline([start, end], {
+            color: color,
+            weight: 5,
+            opacity: 0.8
+        }).addTo(trackMap).bindPopup(`Speed: ${speed.toFixed(1)} km/h`);
+    }
+
+    // Add start/finish marker
+    const startMarker = L.circleMarker(gpsData.coordinates[0], {
+        radius: 8,
+        fillColor: "#00ff00",
+        color: "#fff",
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.9
+    }).addTo(trackMap).bindPopup('<b>Start/Finish</b>');
+
+    // Create position marker (initially hidden)
+    positionMarker = L.circleMarker(gpsData.coordinates[0], {
+        radius: 10,
+        fillColor: "#ffff00",
+        color: "#000",
+        weight: 3,
+        opacity: 1,
+        fillOpacity: 0.9,
+        zIndexOffset: 1000  // Ensure it's on top
+    }).addTo(trackMap);
+
+    // Fit map to track bounds
+    const latLngs = gpsData.coordinates.map(c => [c[0], c[1]]);
+    trackMap.fitBounds(latLngs, { padding: [50, 50] });
+
+    // Add legend
+    const legend = L.control({ position: 'bottomright' });
+    legend.onAdd = function(map) {
+        const div = L.DomUtil.create('div', 'info legend');
+        div.style.background = 'rgba(0, 0, 0, 0.7)';
+        div.style.padding = '10px';
+        div.style.borderRadius = '5px';
+        div.style.color = 'white';
+        div.innerHTML = `
+            <div style="margin-bottom: 5px;"><strong>Speed (km/h)</strong></div>
+            <div><span style="color: rgb(255, 0, 0);">■</span> ${minSpeed.toFixed(0)} (Slow)</div>
+            <div><span style="color: rgb(255, 255, 0);">■</span> ${((minSpeed + maxSpeed) / 2).toFixed(0)} (Medium)</div>
+            <div><span style="color: rgb(0, 255, 255);">■</span> ${maxSpeed.toFixed(0)} (Fast)</div>
+        `;
+        return div;
+    };
+    legend.addTo(trackMap);
+
+    // Attach chart listeners after map is ready
+    setTimeout(function() {
+        console.log('Attaching chart listeners...');
+        attachChartListeners();
+    }, 500);
+});
+</script>
+{% else %}
+<script>
+// Even without GPS data, we can still attach listeners
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        console.log('Attaching chart listeners...');
+        attachChartListeners();
+    }, 500);
+});
+</script>
+{% endif %}
+{% endblock %}
