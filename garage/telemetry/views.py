@@ -8,7 +8,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from django.views.decorators.http import require_POST
 
-from .models import Session, Lap, TelemetryData, Analysis, Track, Car
+from .models import Session, Lap, TelemetryData, Analysis, Track, Car, Team
 from .forms import SessionUploadForm, AnalysisForm
 
 
