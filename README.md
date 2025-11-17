@@ -37,39 +37,59 @@ This is the easiest way to get Ridgway Garage running on your machine.
 1. **Docker Desktop** for Windows 11
    - Download from: https://www.docker.com/products/docker-desktop
    - Install and restart your computer
-   - Ensure WSL 2 is enabled (Docker Desktop will prompt you)
+   - **IMPORTANT**: Docker Desktop requires WSL 2 (Windows Subsystem for Linux 2)
+     - During installation, Docker Desktop will guide you through enabling WSL 2
+     - If prompted, download and install the WSL 2 Linux kernel update
+     - After installation, Docker Desktop should show "Engine running" in the system tray
 
 2. **Git** for Windows
    - Download from: https://git-scm.com/download/win
-   - Install with default settings
+   - Install with default settings (Git Bash will be included)
+
+> **Note for Windows users**: This repository includes a `.gitattributes` file that ensures shell scripts use Unix line endings (LF) even on Windows. This prevents common "bad interpreter" errors when running Docker containers.
 
 ### Installation Steps
 
 1. **Clone the repository**
+
+   Open **Git Bash** (recommended) or **PowerShell** and run:
    ```bash
    git clone https://github.com/yourusername/ridgway_garage.git
    cd ridgway_garage
    ```
 
 2. **Create environment file**
+
+   **In Git Bash:**
    ```bash
+   cp .env.example .env
+   ```
+
+   **In PowerShell or CMD:**
+   ```powershell
    copy .env.example .env
    ```
 
-   Open `.env` in a text editor and update the `SECRET_KEY`:
-   ```
-   SECRET_KEY=your-random-secret-key-here
-   ```
+3. **Generate a secret key**
 
-   To generate a secure secret key, you can use Python:
+   Open `.env` in a text editor (Notepad, VS Code, etc.) and replace the `SECRET_KEY` value.
+
+   **In Git Bash or PowerShell:**
    ```bash
-   python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+   python -c "import secrets; print(secrets.token_urlsafe(50))"
    ```
 
-3. **Start the application**
+   Copy the output and paste it as your `SECRET_KEY` in `.env`:
+   ```
+   SECRET_KEY=your-generated-key-here
+   ```
+
+4. **Start the application**
    ```bash
    docker compose up -d
    ```
+
+   **Note**: If you see "command not found", try `docker-compose up -d` (with hyphen) instead.
 
    This will:
    - Download and build all required containers
@@ -80,19 +100,21 @@ This is the easiest way to get Ridgway Garage running on your machine.
    - Start the Django web server
    - Start Celery workers for background processing
 
-4. **Access the application**
+   **First-time setup takes 2-5 minutes.** You'll see lots of output as containers download and build.
+
+5. **Access the application**
    - Open your browser and go to: http://localhost:42069
    - Login with default credentials:
      - **Username**: `admin`
      - **Password**: `admin`
    - **IMPORTANT**: Change the admin password after first login!
 
-5. **Stop the application**
+6. **Stop the application**
    ```bash
    docker compose down
    ```
 
-6. **View logs**
+7. **View logs** (useful for troubleshooting)
    ```bash
    docker compose logs -f web
    docker compose logs -f celery_worker
@@ -113,25 +135,48 @@ If you prefer not to use Docker, you can install manually.
 
 ### Windows 11 Manual Installation
 
+**Note**: Manual installation is significantly more complex than Docker. Only choose this if you have specific requirements.
+
 1. **Install Python 3.12**
    - Download from: https://www.python.org/downloads/
-   - During installation, check "Add Python to PATH"
+   - **IMPORTANT**: During installation, check "Add Python to PATH"
+   - Verify installation: Open PowerShell and run `python --version`
 
 2. **Install PostgreSQL**
    - Download from: https://www.postgresql.org/download/windows/
-   - Remember the password you set for the `postgres` user
+   - During installation:
+     - Remember the password you set for the `postgres` user
+     - Keep the default port (5432)
+     - Install pgAdmin 4 (optional, but helpful for database management)
 
 3. **Install Redis**
    - Download from: https://github.com/tporadowski/redis/releases
-   - Extract and run `redis-server.exe`
+   - Download `Redis-x64-x.x.xxx.zip`
+   - Extract to a permanent location (e.g., `C:\Redis`)
+   - You'll need to run `redis-server.exe` manually each time (see step 12)
 
 4. **Clone the repository**
+
+   Open **PowerShell** or **Git Bash**:
    ```bash
    git clone https://github.com/yourusername/ridgway_garage.git
    cd ridgway_garage
    ```
 
 5. **Create virtual environment**
+
+   **In PowerShell:**
+   ```powershell
+   python -m venv venv
+   .\venv\Scripts\Activate.ps1
+   ```
+
+   If you get an execution policy error, run:
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+
+   **In Git Bash or CMD:**
    ```bash
    python -m venv venv
    venv\Scripts\activate
@@ -144,18 +189,31 @@ If you prefer not to use Docker, you can install manually.
    ```
 
 7. **Configure environment**
-   ```bash
+
+   **In PowerShell or CMD:**
+   ```powershell
    copy .env.example .env
    ```
 
-   Edit `.env` and update database credentials:
+   **In Git Bash:**
+   ```bash
+   cp .env.example .env
    ```
+
+   Edit `.env` in a text editor and update:
+   ```
+   SECRET_KEY=your-generated-secret-key
    DB_NAME=ridgway_garage
    DB_USER=postgres
    DB_PASSWORD=your_postgres_password
    DB_HOST=localhost
    DB_PORT=5432
    REDIS_URL=redis://localhost:6379/0
+   ```
+
+   Generate a secret key:
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(50))"
    ```
 
 8. **Create database**
@@ -336,7 +394,56 @@ Key environment variables in `.env`:
 
 ## Troubleshooting
 
-### Docker Issues
+### Windows-Specific Docker Issues
+
+**Docker Desktop not starting / "Docker Engine stopped"**
+
+1. Ensure WSL 2 is installed and set as default:
+   ```powershell
+   wsl --set-default-version 2
+   wsl --update
+   ```
+
+2. Restart Docker Desktop from the system tray icon
+
+3. If still not working, restart your computer
+
+**"docker compose" command not found**
+
+- Try using `docker-compose` (with hyphen) instead: `docker-compose up -d`
+- Or update Docker Desktop to the latest version (includes Compose V2)
+
+**Line ending errors (LF vs CRLF)**
+
+If you see errors like `^M: bad interpreter` or `\r: command not found`:
+
+1. Git is converting line endings to Windows format (CRLF)
+2. Configure Git to keep Unix line endings for shell scripts:
+   ```bash
+   git config --global core.autocrlf input
+   ```
+
+3. Re-clone the repository or reset files:
+   ```bash
+   git rm -rf --cached .
+   git reset --hard
+   ```
+
+**Port 42069 already in use on Windows**
+
+Check what's using the port:
+```powershell
+netstat -ano | findstr :42069
+```
+
+Kill the process (replace PID with the actual process ID):
+```powershell
+taskkill /PID <PID> /F
+```
+
+Or change the port in `docker-compose.yml` as described below.
+
+### General Docker Issues
 
 **Docker permission denied (Linux/WSL)**
 
