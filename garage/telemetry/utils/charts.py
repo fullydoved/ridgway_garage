@@ -216,7 +216,7 @@ def create_rpm_gear_chart(telemetry_data):
 
     fig.update_xaxes(title_text="Distance (m)")
     fig.update_yaxes(title_text="RPM", secondary_y=False)
-    fig.update_yaxes(title_text="Gear", secondary_y=True)
+    fig.update_yaxes(title_text="Gear", range=[0, 10], secondary_y=True)
 
     fig.update_layout(
         title='RPM and Gear',
@@ -538,7 +538,7 @@ def create_combined_telemetry_chart(telemetry_data):
             )
 
         fig.update_yaxes(title_text="RPM", row=current_row, col=1, secondary_y=False)
-        fig.update_yaxes(title_text="Gear", row=current_row, col=1, secondary_y=True)
+        fig.update_yaxes(title_text="Gear", range=[0, 10], row=current_row, col=1, secondary_y=True)
         current_row += 1
         legend_group += 1
 
@@ -900,7 +900,7 @@ def create_comparison_chart(laps):
                 )
 
         fig.update_yaxes(title_text="RPM", row=current_row, col=1, secondary_y=False)
-        fig.update_yaxes(title_text="Gear", row=current_row, col=1, secondary_y=True)
+        fig.update_yaxes(title_text="Gear", range=[0, 10], row=current_row, col=1, secondary_y=True)
         current_row += 1
 
     # Add Tire Temperature comparisons (one subplot per tire)
