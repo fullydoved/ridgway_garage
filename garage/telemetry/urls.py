@@ -21,6 +21,8 @@ urlpatterns = [
 
     # Lap views
     path('laps/<int:pk>/', views.lap_detail, name='lap_detail'),
+    path('laps/<int:pk>/export/', views.lap_export, name='lap_export'),
+    path('laps/import/', views.lap_import, name='lap_import'),
     path('compare/', views.lap_compare, name='lap_compare'),
 
     # Analysis (lap comparison)

@@ -143,6 +143,7 @@ class Session(models.Model):
         ('race', 'Race'),
         ('time_trial', 'Time Trial'),
         ('testing', 'Testing'),
+        ('imported', 'Imported Lap'),
     ]
 
     PROCESSING_STATUS_CHOICES = [
@@ -166,7 +167,9 @@ class Session(models.Model):
     ibt_file = models.FileField(
         upload_to='telemetry/%Y/%m/%d/',
         validators=[FileExtensionValidator(['ibt', 'IBT'])],
-        help_text="Uploaded IBT telemetry file"
+        help_text="Uploaded IBT telemetry file",
+        null=True,
+        blank=True
     )
 
     # Processing status

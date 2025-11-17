@@ -462,6 +462,226 @@ def analysis_remove_lap(request, pk, lap_id):
 
 
 # ================================
+# Lap Export/Import Views
+# ================================
+
+@login_required
+def lap_export(request, pk):
+    """
+    Export a lap as a compressed JSON file (.lap.gz).
+    Includes lap data, session metadata, and full telemetry.
+    """
+    import gzip
+    import json
+    from django.http import HttpResponse
+    from datetime import datetime
+
+    lap = get_object_or_404(
+        Lap.objects.select_related(
+            'session', 'session__track', 'session__car', 'session__driver', 'telemetry'
+        ),
+        pk=pk
+    )
+
+    # Check permissions
+    if lap.session.driver != request.user:
+        messages.error(request, "You don't have permission to export this lap.")
+        return redirect('telemetry:session_list')
+
+    # Get telemetry data
+    try:
+        telemetry = lap.telemetry
+    except TelemetryData.DoesNotExist:
+        messages.error(request, "No telemetry data available for this lap.")
+        return redirect('telemetry:lap_detail', pk=pk)
+
+    # Build export data structure
+    export_data = {
+        'format_version': '1.0',
+        'exported_at': datetime.utcnow().isoformat() + 'Z',
+        'lap': {
+            'lap_number': lap.lap_number,
+            'lap_time': float(lap.lap_time),
+            'sector1_time': float(lap.sector1_time) if lap.sector1_time else None,
+            'sector2_time': float(lap.sector2_time) if lap.sector2_time else None,
+            'sector3_time': float(lap.sector3_time) if lap.sector3_time else None,
+            'is_valid': lap.is_valid,
+        },
+        'session': {
+            'track_name': lap.session.track.name if lap.session.track else 'Unknown Track',
+            'track_config': lap.session.track.configuration if lap.session.track else '',
+            'car_name': lap.session.car.name if lap.session.car else 'Unknown Car',
+            'session_type': lap.session.session_type,
+            'session_date': lap.session.session_date.isoformat(),
+            'air_temp': float(lap.session.air_temp) if lap.session.air_temp else None,
+            'track_temp': float(lap.session.track_temp) if lap.session.track_temp else None,
+            'weather_type': lap.session.weather_type or '',
+        },
+        'driver': {
+            'display_name': lap.session.driver.driver_profile.display_name if hasattr(lap.session.driver, 'driver_profile') and lap.session.driver.driver_profile.display_name else lap.session.driver.username,
+        },
+        'telemetry': {
+            'sample_count': telemetry.sample_count,
+            'max_speed': float(telemetry.max_speed) if telemetry.max_speed else None,
+            'avg_speed': float(telemetry.avg_speed) if telemetry.avg_speed else None,
+            'data': telemetry.data,
+        }
+    }
+
+    # Convert to JSON
+    json_data = json.dumps(export_data, indent=2)
+
+    # Compress with gzip
+    compressed_data = gzip.compress(json_data.encode('utf-8'))
+
+    # Generate filename
+    track_name = (lap.session.track.name if lap.session.track else 'Unknown').replace(' ', '_')
+    car_name = (lap.session.car.name if lap.session.car else 'Unknown').replace(' ', '_')
+    lap_time_str = f"{lap.lap_time:.3f}".replace('.', '_')
+    filename = f"{track_name}_{car_name}_{lap_time_str}.lap.gz"
+
+    # Create HTTP response
+    response = HttpResponse(compressed_data, content_type='application/gzip')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response['Content-Length'] = len(compressed_data)
+
+    return response
+
+
+@login_required
+def lap_import(request):
+    """
+    Import a lap from a compressed JSON file (.lap.gz).
+    Creates a new Session with type 'imported' and associated Lap and TelemetryData.
+    """
+    import gzip
+    import json
+    from django.utils.dateutil import parser as date_parser
+    from decimal import Decimal
+
+    if request.method == 'POST':
+        uploaded_file = request.FILES.get('lap_file')
+
+        if not uploaded_file:
+            messages.error(request, 'Please select a file to import.')
+            return redirect('telemetry:lap_import')
+
+        # Check file extension
+        if not uploaded_file.name.endswith('.lap.gz'):
+            messages.error(request, 'Invalid file format. Please upload a .lap.gz file.')
+            return redirect('telemetry:lap_import')
+
+        # Check file size (max 50MB compressed, should be plenty)
+        if uploaded_file.size > 50 * 1024 * 1024:
+            messages.error(request, 'File too large. Maximum size is 50MB.')
+            return redirect('telemetry:lap_import')
+
+        try:
+            # Decompress and parse JSON
+            compressed_data = uploaded_file.read()
+            json_data = gzip.decompress(compressed_data).decode('utf-8')
+            data = json.loads(json_data)
+
+            # Validate format version
+            if data.get('format_version') != '1.0':
+                messages.error(request, f"Unsupported format version: {data.get('format_version')}")
+                return redirect('telemetry:lap_import')
+
+            # Validate required fields
+            required_fields = ['lap', 'session', 'driver', 'telemetry']
+            for field in required_fields:
+                if field not in data:
+                    messages.error(request, f"Invalid file format: missing '{field}' field.")
+                    return redirect('telemetry:lap_import')
+
+            # Get or create Track
+            track_name = data['session'].get('track_name', 'Unknown Track')
+            track_config = data['session'].get('track_config', '')
+            track, _ = Track.objects.get_or_create(
+                name=track_name,
+                configuration=track_config,
+                defaults={'name': track_name, 'configuration': track_config}
+            )
+
+            # Get or create Car
+            car_name = data['session'].get('car_name', 'Unknown Car')
+            car, _ = Car.objects.get_or_create(
+                name=car_name,
+                defaults={'name': car_name}
+            )
+
+            # Parse session date
+            try:
+                session_date = date_parser.parse(data['session']['session_date'])
+            except:
+                session_date = timezone.now()
+
+            # Create Session
+            session = Session.objects.create(
+                driver=request.user,
+                team=request.user.driver_profile.default_team if hasattr(request.user, 'driver_profile') else None,
+                track=track,
+                car=car,
+                session_type='imported',
+                session_date=session_date,
+                processing_status='completed',
+                air_temp=Decimal(str(data['session']['air_temp'])) if data['session'].get('air_temp') is not None else None,
+                track_temp=Decimal(str(data['session']['track_temp'])) if data['session'].get('track_temp') is not None else None,
+                weather_type=data['session'].get('weather_type', ''),
+                is_public=False,
+            )
+
+            # Create Lap
+            lap_data = data['lap']
+            lap = Lap.objects.create(
+                session=session,
+                lap_number=lap_data.get('lap_number', 1),
+                lap_time=Decimal(str(lap_data['lap_time'])),
+                sector1_time=Decimal(str(lap_data['sector1_time'])) if lap_data.get('sector1_time') is not None else None,
+                sector2_time=Decimal(str(lap_data['sector2_time'])) if lap_data.get('sector2_time') is not None else None,
+                sector3_time=Decimal(str(lap_data['sector3_time'])) if lap_data.get('sector3_time') is not None else None,
+                is_valid=lap_data.get('is_valid', True),
+            )
+
+            # Create TelemetryData
+            telemetry_data = data['telemetry']
+            TelemetryData.objects.create(
+                lap=lap,
+                data=telemetry_data['data'],
+                sample_count=telemetry_data.get('sample_count', len(telemetry_data['data'].get('Distance', []))),
+                max_speed=Decimal(str(telemetry_data['max_speed'])) if telemetry_data.get('max_speed') is not None else None,
+                avg_speed=Decimal(str(telemetry_data['avg_speed'])) if telemetry_data.get('avg_speed') is not None else None,
+            )
+
+            # Get driver display name from imported data
+            imported_driver_name = data['driver'].get('display_name', 'Unknown Driver')
+
+            messages.success(
+                request,
+                f"Lap imported successfully! {imported_driver_name}'s lap on {track_name} ({car_name}) - {lap.lap_time}s"
+            )
+
+            # Redirect to lap detail or suggest creating an analysis
+            return redirect('telemetry:lap_detail', pk=lap.pk)
+
+        except gzip.BadGzipFile:
+            messages.error(request, 'Invalid file format. File is not a valid gzip file.')
+            return redirect('telemetry:lap_import')
+        except json.JSONDecodeError as e:
+            messages.error(request, f'Invalid JSON format: {str(e)}')
+            return redirect('telemetry:lap_import')
+        except Exception as e:
+            messages.error(request, f'Error importing lap: {str(e)}')
+            return redirect('telemetry:lap_import')
+
+    # GET request - show import form
+    context = {
+        'page_title': 'Import Lap',
+    }
+    return render(request, 'telemetry/lap_import.html', context)
+
+
+# ================================
 # System Update Views
 # ================================
 

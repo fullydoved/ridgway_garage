@@ -97,41 +97,47 @@
                 <i class="bi bi-arrow-left"></i> Back to Session
             </a>
 
-            {% if user_analyses %}
-            <div class="btn-group" role="group">
-                <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-plus-circle"></i> Add to Analysis
-                </button>
-                <ul class="dropdown-menu">
-                    {% for analysis in user_analyses %}
-                    <li>
-                        {% if analysis.contains_this_lap %}
-                            <span class="dropdown-item text-muted" style="cursor: not-allowed;">
-                                {{ analysis.name }} <i class="bi bi-check-circle-fill text-success"></i>
-                            </span>
-                        {% else %}
-                            <form method="post" action="{% url 'telemetry:analysis_add_lap' analysis.pk lap.pk %}" class="d-inline">
-                                {% csrf_token %}
-                                <button type="submit" class="dropdown-item">
-                                    {{ analysis.name }}
-                                </button>
-                            </form>
-                        {% endif %}
-                    </li>
-                    {% endfor %}
-                    <li><hr class="dropdown-divider"></li>
-                    <li>
-                        <a class="dropdown-item" href="{% url 'telemetry:analysis_create' %}?lap_id={{ lap.pk }}">
-                            <i class="bi bi-plus"></i> Create New Analysis
-                        </a>
-                    </li>
-                </ul>
+            <div class="d-flex gap-2">
+                {% if user_analyses %}
+                <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="bi bi-plus-circle"></i> Add to Analysis
+                    </button>
+                    <ul class="dropdown-menu">
+                        {% for analysis in user_analyses %}
+                        <li>
+                            {% if analysis.contains_this_lap %}
+                                <span class="dropdown-item text-muted" style="cursor: not-allowed;">
+                                    {{ analysis.name }} <i class="bi bi-check-circle-fill text-success"></i>
+                                </span>
+                            {% else %}
+                                <form method="post" action="{% url 'telemetry:analysis_add_lap' analysis.pk lap.pk %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="dropdown-item">
+                                        {{ analysis.name }}
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <a class="dropdown-item" href="{% url 'telemetry:analysis_create' %}?lap_id={{ lap.pk }}">
+                                <i class="bi bi-plus"></i> Create New Analysis
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+                {% else %}
+                <a href="{% url 'telemetry:analysis_create' %}?lap_id={{ lap.pk }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> Create Analysis
+                </a>
+                {% endif %}
+
+                <a href="{% url 'telemetry:lap_export' lap.pk %}" class="btn btn-success">
+                    <i class="bi bi-download"></i> Export Lap
+                </a>
             </div>
-            {% else %}
-            <a href="{% url 'telemetry:analysis_create' %}?lap_id={{ lap.pk }}" class="btn btn-primary">
-                <i class="bi bi-plus-circle"></i> Create Analysis
-            </a>
-            {% endif %}
         </div>
 
         <div class="d-flex justify-content-between align-items-center">
