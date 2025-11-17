@@ -225,11 +225,28 @@
 {% endwith %}
 {% endif %}
 
+<!-- Time Delta Chart -->
+{% if delta_chart %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-graph-up-arrow"></i> Time Delta Analysis</h5>
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-3">
+            <i class="bi bi-info-circle"></i>
+            Time gained or lost compared to the fastest lap. The fastest lap is shown as the 0-second baseline.
+            Positive values mean you're losing time (slower), negative values mean you're gaining time (faster).
+        </p>
+        {{ delta_chart|safe }}
+    </div>
+</div>
+{% endif %}
+
 <!-- Comparison Charts -->
 {% if comparison_chart %}
 <div class="card">
     <div class="card-header">
-        <h5 class="mb-0"><i class="bi bi-graph-up"></i> Lap Comparison</h5>
+        <h5 class="mb-0"><i class="bi bi-graph-up"></i> Detailed Lap Comparison</h5>
     </div>
     <div class="card-body">
         <p class="text-muted mb-3">

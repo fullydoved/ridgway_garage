@@ -341,7 +341,7 @@ def analysis_detail(request, pk):
     """
     View an analysis with comparison charts.
     """
-    from .utils.charts import create_comparison_chart, prepare_comparison_gps_data
+    from .utils.charts import create_comparison_chart, prepare_comparison_gps_data, create_time_delta_chart
     import json
 
     analysis = get_object_or_404(
@@ -363,8 +363,10 @@ def analysis_detail(request, pk):
 
     # Generate comparison charts if we have at least 2 laps
     comparison_chart = None
+    delta_chart = None
     if laps.count() >= 2:
         comparison_chart = create_comparison_chart(laps)
+        delta_chart = create_time_delta_chart(laps)
 
     # Prepare GPS data for track overlay
     comparison_gps_data = None
@@ -377,6 +379,7 @@ def analysis_detail(request, pk):
         'analysis': analysis,
         'laps': laps,
         'comparison_chart': comparison_chart,
+        'delta_chart': delta_chart,
         'comparison_gps_data': comparison_gps_data,
     }
 

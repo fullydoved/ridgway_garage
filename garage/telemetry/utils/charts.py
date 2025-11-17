@@ -915,3 +915,159 @@ def prepare_comparison_gps_data(laps):
         return None
 
     return laps_gps_data
+
+
+def create_time_delta_chart(laps):
+    """
+    Create a time delta chart showing time gained/lost vs the fastest lap.
+
+    The fastest lap is set as the baseline (0 line). Positive values mean
+    the lap is slower (losing time), negative values mean faster (gaining time).
+
+    Args:
+        laps: QuerySet or list of Lap objects to compare
+
+    Returns:
+        HTML string for embedding in template, or None if not enough data
+    """
+    if not laps or len(laps) < 2:
+        return None
+
+    # Color palette for different laps
+    colors = [
+        '#00d4ff',  # Cyan
+        '#ff6b00',  # Orange
+        '#00ff00',  # Green
+        '#ff0088',  # Pink
+        '#ffaa00',  # Yellow
+        '#8800ff',  # Purple
+        '#00ffaa',  # Teal
+        '#ff0000',  # Red
+    ]
+
+    # Extract telemetry data from all laps
+    lap_data = []
+    for lap in laps:
+        try:
+            telemetry = lap.telemetry
+            if telemetry and telemetry.data:
+                if 'SessionTime' in telemetry.data and 'LapDist' in telemetry.data:
+                    lap_data.append({
+                        'lap': lap,
+                        'data': telemetry.data,
+                        'color': colors[len(lap_data) % len(colors)]
+                    })
+        except:
+            pass
+
+    if len(lap_data) < 2:
+        return None
+
+    # Sort by lap time to find the fastest (baseline)
+    lap_data.sort(key=lambda x: x['lap'].lap_time)
+    fastest = lap_data[0]
+
+    # Import numpy for interpolation
+    import numpy as np
+
+    fig = go.Figure()
+
+    # Process each lap (skip the fastest since it's the baseline)
+    for i, lap_info in enumerate(lap_data):
+        lap = lap_info['lap']
+        data = lap_info['data']
+
+        # Skip the fastest lap (it's the 0 line)
+        if lap == fastest['lap']:
+            continue
+
+        try:
+            # Get distance and time arrays for this lap
+            lap_distance = np.array(data['LapDist'])
+            lap_time = np.array(data['SessionTime'])
+
+            # Get distance and time arrays for fastest lap
+            fastest_distance = np.array(fastest['data']['LapDist'])
+            fastest_time = np.array(fastest['data']['SessionTime'])
+
+            # Normalize both to start at 0
+            lap_time = lap_time - lap_time[0]
+            fastest_time = fastest_time - fastest_time[0]
+
+            # Find common distance range
+            min_dist = max(lap_distance[0], fastest_distance[0])
+            max_dist = min(lap_distance[-1], fastest_distance[-1])
+
+            # Create common distance array for comparison (every 10 meters)
+            common_distance = np.arange(min_dist, max_dist, 10)
+
+            # Interpolate both laps' times to the common distance points
+            lap_time_interp = np.interp(common_distance, lap_distance, lap_time)
+            fastest_time_interp = np.interp(common_distance, fastest_distance, fastest_time)
+
+            # Calculate delta (positive = slower, negative = faster)
+            time_delta = lap_time_interp - fastest_time_interp
+
+            fig.add_trace(go.Scatter(
+                x=common_distance,
+                y=time_delta,
+                mode='lines',
+                name=f'Lap {lap.lap_number} ({lap.lap_time:.3f}s, +{lap.lap_time - fastest["lap"].lap_time:.3f}s)',
+                line=dict(color=lap_info['color'], width=2),
+                hovertemplate='<b>%{fullData.name}</b><br>Distance: %{x:.0f}m<br>Delta: %{y:+.3f}s<extra></extra>',
+                fill='tozeroy',
+                fillcolor=f'rgba({int(lap_info["color"][1:3], 16)}, {int(lap_info["color"][3:5], 16)}, {int(lap_info["color"][5:7], 16)}, 0.1)'
+            ))
+
+        except Exception as e:
+            # Skip this lap if interpolation fails
+            continue
+
+    # Add zero reference line (fastest lap baseline)
+    fig.add_hline(
+        y=0,
+        line_dash="solid",
+        line_color=fastest['color'],
+        line_width=3,
+        annotation_text=f"Fastest Lap {fastest['lap'].lap_number} ({fastest['lap'].lap_time:.3f}s)",
+        annotation_position="top right",
+        annotation_font_color=fastest['color']
+    )
+
+    fig.update_layout(
+        title='Time Delta vs Fastest Lap',
+        xaxis_title='Distance (m)',
+        yaxis_title='Time Delta (seconds)',
+        yaxis_zeroline=True,
+        yaxis_zerolinewidth=2,
+        yaxis_zerolinecolor='gray',
+        template='plotly_dark',
+        hovermode='x unified',
+        height=450,
+        margin=dict(l=60, r=60, t=80, b=50),
+        dragmode='zoom',
+        showlegend=True,
+        legend=dict(
+            orientation="v",
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.01,
+            bgcolor='rgba(0, 0, 0, 0.5)'
+        )
+    )
+
+    # Add annotations to help interpret the chart
+    fig.add_annotation(
+        text="<i>Positive = Losing time | Negative = Gaining time</i>",
+        xref="paper", yref="paper",
+        x=0.5, y=-0.15,
+        showarrow=False,
+        font=dict(size=12, color='gray'),
+        xanchor='center'
+    )
+
+    return fig.to_html(div_id='delta-chart', include_plotlyjs=False, config={
+        'displayModeBar': True,
+        'modeBarButtonsToRemove': ['toImage']
+    })
