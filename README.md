@@ -11,6 +11,7 @@ A comprehensive web application for analyzing iRacing telemetry data, comparing 
 - 🏆 **Personal Best Tracking** - Automatically identify and highlight your best laps
 - 👥 **Team Collaboration** - Share analyses with team members
 - 🔐 **Authentication** - Secure login with Discord OAuth integration
+- 📦 **Large File Support** - Upload IBT files up to 2GB (handles Nurburgring endurance sessions)
 
 ## Tech Stack
 
@@ -19,8 +20,10 @@ A comprehensive web application for analyzing iRacing telemetry data, comparing 
 - **Cache/Queue**: Redis 7
 - **Task Queue**: Celery for background processing
 - **WebSockets**: Django Channels for real-time updates
-- **Visualization**: Plotly.js, Leaflet.js
+- **Web Server**: Nginx (Alpine) for static files and reverse proxy
+- **Visualization**: Plotly.js, Leaflet.js (all bundled locally)
 - **Deployment**: Docker & Docker Compose
+- **Running on**: Port 42069 🚀
 
 ---
 
@@ -77,7 +80,7 @@ This is the easiest way to get Ridgway Garage running on your machine.
    - Start Celery workers for background processing
 
 4. **Access the application**
-   - Open your browser and go to: http://localhost:8000
+   - Open your browser and go to: http://localhost:42069
    - Login with default credentials:
      - **Username**: `admin`
      - **Password**: `admin`
@@ -251,15 +254,29 @@ ridgway_garage/
 │   │   ├── views.py          # View logic
 │   │   ├── forms.py          # Django forms
 │   │   ├── tasks.py          # Celery background tasks
+│   │   ├── consumers.py      # WebSocket consumers
+│   │   ├── routing.py        # WebSocket routing
 │   │   ├── utils/            # Utility modules
 │   │   │   ├── ibt_parser.py # IBT file parsing
 │   │   │   └── charts.py     # Plotly chart generation
 │   │   ├── templates/        # HTML templates
-│   │   └── static/           # CSS, JS, images
+│   │   └── static/           # CSS, JS, images, vendor libs
+│   │       └── telemetry/
+│   │           ├── css/      # Custom stylesheets
+│   │           ├── img/      # Images and favicon
+│   │           ├── js/       # Custom JavaScript
+│   │           └── vendor/   # Third-party libraries (local)
+│   │               ├── bootstrap/
+│   │               ├── bootstrap-icons/
+│   │               ├── leaflet/
+│   │               └── plotly/
 │   ├── media/                # User uploads (IBT files)
 │   ├── staticfiles/          # Collected static files
 │   ├── manage.py             # Django management script
 │   └── requirements.txt      # Python dependencies
+├── nginx/                    # Nginx web server config
+│   ├── nginx.conf            # Nginx configuration
+│   └── README.md             # Nginx documentation
 ├── docker-compose.yml        # Docker services configuration
 ├── Dockerfile                # Docker image build instructions
 ├── docker-entrypoint.sh      # Container startup script
@@ -276,17 +293,20 @@ The `docker-compose.yml` defines the following services:
 - **db** - PostgreSQL 16 database
 - **redis** - Redis 7 for caching and message broker
 - **web** - Django application (Daphne ASGI server)
+- **nginx** - Nginx web server for static files and reverse proxy
 - **celery_worker** - Background task processor
 - **celery_beat** - Scheduled task scheduler
 
-### Network Isolation
+### Network Isolation & Architecture
 
 All services are connected via a **private Docker network** (`ridgway_network`) with the following benefits:
 
 ✅ **No Port Conflicts** - PostgreSQL and Redis do NOT expose ports to your host machine, so they won't conflict with system installations
 ✅ **Isolated Environment** - Services communicate internally using container names (e.g., `db:5432`, `redis:6379`)
 ✅ **Secure by Default** - Database and Redis are only accessible from within the Docker network
-✅ **Only Port 8000 Exposed** - The web application is accessible at `http://localhost:8000`
+✅ **Production-Ready Web Server** - Nginx serves static files efficiently and proxies Django/WebSocket requests
+✅ **Only Port 42069 Exposed** - The web application is accessible at `http://localhost:42069`
+✅ **Self-Contained** - All CSS, JS, fonts, and icons are bundled locally (no CDN dependencies - works offline!)
 
 This means you can run Ridgway Garage alongside your system PostgreSQL/Redis without any conflicts!
 
@@ -345,12 +365,14 @@ docker compose logs -f
 
 ### Port Already in Use
 
-If port 8000 is already in use, edit `docker-compose.yml`:
+If port 42069 is already in use, edit `docker-compose.yml`:
 ```yaml
-web:
+nginx:
   ports:
-    - "8001:8000"  # Change host port to 8001
+    - "8080:80"  # Change host port to 8080 (or any available port)
 ```
+
+Then access the app at http://localhost:8080 (or whatever port you chose)
 
 ### Celery Tasks Not Running
 
@@ -363,6 +385,24 @@ Restart Celery worker:
 ```bash
 docker compose restart celery_worker
 ```
+
+### Large File Upload Issues
+
+If you're having trouble uploading very large IBT files (>1GB):
+
+1. **Check nginx logs**:
+   ```bash
+   docker compose logs -f nginx
+   ```
+
+2. **Verify settings**:
+   - Nginx: `client_max_body_size 2G` in `nginx/nginx.conf`
+   - Django: `DATA_UPLOAD_MAX_MEMORY_SIZE = 2147483648` in `settings.py`
+
+3. **Increase limits if needed** (for files >2GB):
+   - Update `nginx/nginx.conf`: change `client_max_body_size` value
+   - Update `garage/garage/settings.py`: change `DATA_UPLOAD_MAX_MEMORY_SIZE`
+   - Rebuild: `docker compose down && docker compose build && docker compose up -d`
 
 ---
 

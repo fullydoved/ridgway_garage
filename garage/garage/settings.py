@@ -28,6 +28,12 @@ DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
+# CSRF Trusted Origins (for non-standard ports)
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:42069',
+    'http://127.0.0.1:42069',
+]
+
 
 # Application definition
 
@@ -270,14 +276,14 @@ else:
     }
 
 # File Upload Settings
-# IBT files can be 100MB+ so we need generous limits
+# IBT files can exceed 1GB for long sessions (e.g., Nurburgring endurance)
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB - files larger than this use temp file
-DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2147483648  # 2GB max request size
 FILE_UPLOAD_PERMISSIONS = 0o644
 FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o755
 
-# Maximum upload size (500MB for large telemetry files)
-MAX_UPLOAD_SIZE = 524288000  # 500MB in bytes
+# Maximum upload size (2GB for large telemetry files)
+MAX_UPLOAD_SIZE = 2147483648  # 2GB in bytes
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field

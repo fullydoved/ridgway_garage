@@ -3,10 +3,7 @@
 {% block title %}{{ analysis.name }}{% endblock %}
 
 {% block extra_css %}
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""/>
+<!-- Leaflet CSS (loaded from base.html) -->
 <style>
     #comparison-track-map {
         height: 400px;
@@ -140,6 +137,94 @@
 </div>
 {% endif %}
 
+<!-- Session Info Panel (if all laps are from the same session) -->
+{% if laps.count > 0 %}
+{% with first_session=laps.first.session %}
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-info-circle"></i> Session Information</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <!-- Track Info -->
+            <div class="col-md-3">
+                <h6 class="text-muted mb-2"><i class="bi bi-geo-alt"></i> Track</h6>
+                {% if analysis.track %}
+                <div class="mb-1">
+                    <strong>{{ analysis.track.name }}</strong>
+                </div>
+                {% if analysis.track.configuration %}
+                <div class="small text-muted">{{ analysis.track.configuration }}</div>
+                {% endif %}
+                {% if analysis.track.length_km %}
+                <div class="small text-muted">
+                    <i class="bi bi-rulers"></i> {{ analysis.track.length_km }} km
+                </div>
+                {% endif %}
+                {% else %}
+                <div class="small text-muted">Multiple tracks</div>
+                {% endif %}
+            </div>
+
+            <!-- Car Info -->
+            <div class="col-md-3">
+                <h6 class="text-muted mb-2"><i class="bi bi-car-front"></i> Car</h6>
+                {% if analysis.car %}
+                <div class="mb-1">
+                    <strong>{{ analysis.car.name }}</strong>
+                </div>
+                {% if analysis.car.car_class %}
+                <div class="small text-muted">{{ analysis.car.car_class }}</div>
+                {% endif %}
+                {% else %}
+                <div class="small text-muted">Multiple cars</div>
+                {% endif %}
+            </div>
+
+            <!-- Session Details -->
+            <div class="col-md-3">
+                <h6 class="text-muted mb-2"><i class="bi bi-calendar-event"></i> Session</h6>
+                <div class="mb-1">
+                    <strong>{{ first_session.get_session_type_display }}</strong>
+                </div>
+                <div class="small text-muted">
+                    <i class="bi bi-clock"></i> {{ first_session.session_date|date:"M d, Y H:i" }}
+                </div>
+                {% if first_session.team %}
+                <div class="small text-muted">
+                    <i class="bi bi-people"></i> {{ first_session.team.name }}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Environmental Conditions -->
+            <div class="col-md-3">
+                <h6 class="text-muted mb-2"><i class="bi bi-cloud-sun"></i> Conditions</h6>
+                {% if first_session.weather_type %}
+                <div class="mb-1">
+                    <strong>{{ first_session.weather_type }}</strong>
+                </div>
+                {% endif %}
+                {% if first_session.air_temp %}
+                <div class="small text-muted">
+                    <i class="bi bi-thermometer-half"></i> Air: {{ first_session.air_temp }}°C
+                </div>
+                {% endif %}
+                {% if first_session.track_temp %}
+                <div class="small text-muted">
+                    <i class="bi bi-thermometer-sun"></i> Track: {{ first_session.track_temp }}°C
+                </div>
+                {% endif %}
+                {% if not first_session.air_temp and not first_session.track_temp and not first_session.weather_type %}
+                <div class="small text-muted">No data available</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endwith %}
+{% endif %}
+
 <!-- Comparison Charts -->
 {% if comparison_chart %}
 <div class="card">
@@ -192,11 +277,7 @@
 
 {% block extra_js %}
 {% if comparison_gps_data %}
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""></script>
-
+<!-- Leaflet loaded from base.html -->
 <script>
     // Initialize the map for comparison track overlay
     const comparisonGpsData = {{ comparison_gps_data|safe }};

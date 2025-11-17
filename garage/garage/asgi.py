@@ -24,19 +24,18 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'garage.settings')
 django_asgi_app = get_asgi_application()
 
 # Import routing after Django is initialized to avoid AppRegistryNotReady error
-# This import will be available after we create the telemetry app
-# from telemetry.routing import websocket_urlpatterns
+from telemetry.routing import websocket_urlpatterns
 
 application = ProtocolTypeRouter({
     # Django's ASGI application to handle traditional HTTP requests
     "http": django_asgi_app,
 
-    # WebSocket handler (will be configured after telemetry app is created)
-    # "websocket": AllowedHostsOriginValidator(
-    #     AuthMiddlewareStack(
-    #         URLRouter(
-    #             websocket_urlpatterns
-    #         )
-    #     )
-    # ),
+    # WebSocket handler for real-time updates
+    "websocket": AllowedHostsOriginValidator(
+        AuthMiddlewareStack(
+            URLRouter(
+                websocket_urlpatterns
+            )
+        )
+    ),
 })

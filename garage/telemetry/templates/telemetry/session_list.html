@@ -106,17 +106,46 @@
                                 {% if session.processing_status == 'completed' %}
                                 <span class="badge bg-success mb-2">Completed</span>
                                 <br>
-                                <a href="{% url 'telemetry:session_detail' session.pk %}" class="btn btn-sm btn-primary">
+                                <a href="{% url 'telemetry:session_detail' session.pk %}" class="btn btn-sm btn-primary me-1">
                                     View Details <i class="bi bi-arrow-right"></i>
                                 </a>
+                                <form method="post" action="{% url 'telemetry:session_delete' session.pk %}" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this session and all its laps?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete session">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
                                 {% elif session.processing_status == 'processing' %}
-                                <span class="badge bg-warning processing">Processing...</span>
-                                {% elif session.processing_status == 'failed' %}
-                                <span class="badge bg-danger">Failed</span>
+                                <span class="badge bg-warning processing mb-2">Processing...</span>
                                 <br>
-                                <small class="text-danger">{{ session.processing_error|truncatewords:10 }}</small>
+                                <a href="{% url 'telemetry:session_detail' session.pk %}" class="btn btn-sm btn-outline-secondary me-1">
+                                    View Progress
+                                </a>
+                                <form method="post" action="{% url 'telemetry:session_delete' session.pk %}" class="d-inline" onsubmit="return confirm('This session is still processing. Are you sure you want to delete it?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete session">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                                {% elif session.processing_status == 'failed' %}
+                                <span class="badge bg-danger mb-2">Failed</span>
+                                <br>
+                                <small class="text-danger d-block mb-2">{{ session.processing_error|truncatewords:10 }}</small>
+                                <form method="post" action="{% url 'telemetry:session_delete' session.pk %}" class="d-inline" onsubmit="return confirm('Delete this failed session?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete session">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                </form>
                                 {% else %}
-                                <span class="badge bg-secondary">Pending</span>
+                                <span class="badge bg-secondary mb-2">Pending</span>
+                                <br>
+                                <form method="post" action="{% url 'telemetry:session_delete' session.pk %}" class="d-inline" onsubmit="return confirm('Delete this pending session?');">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete session">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
                                 {% endif %}
                             </div>
                         </div>

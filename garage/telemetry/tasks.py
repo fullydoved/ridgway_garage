@@ -5,9 +5,35 @@ Celery tasks for processing telemetry data.
 from celery import shared_task
 from django.utils import timezone
 from django.core.exceptions import ObjectDoesNotExist
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def send_processing_update(session_id, status, progress, message='', current_step=''):
+    """
+    Send a processing update via WebSocket to connected clients.
+
+    Args:
+        session_id: ID of the session being processed
+        status: 'processing', 'completed', or 'failed'
+        progress: Integer 0-100 representing completion percentage
+        message: Optional status message
+        current_step: Current operation being performed
+    """
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        f'telemetry_processing_{session_id}',
+        {
+            'type': 'processing_update',
+            'status': status,
+            'progress': progress,
+            'message': message,
+            'current_step': current_step,
+        }
+    )
 
 
 @shared_task(bind=True, max_retries=3)
@@ -35,6 +61,13 @@ def parse_ibt_file(self, session_id):
 
         logger.info(f"Starting IBT file processing for session {session_id}")
 
+        # Send initial progress update
+        send_processing_update(
+            session_id, 'processing', 0,
+            'Starting IBT file processing...',
+            'Opening file'
+        )
+
         # Open the IBT file
         ibt = irsdk.IBT()
         ibt.open(session.ibt_file.path)
@@ -59,6 +92,12 @@ def parse_ibt_file(self, session_id):
 
         if not session_info:
             raise ValueError("Could not read session info from IBT file")
+
+        send_processing_update(
+            session_id, 'processing', 10,
+            'Extracted session metadata',
+            'Detecting track and car'
+        )
 
         # Auto-detect track if not specified
         if not session.track and 'WeekendInfo' in session_info:
@@ -155,6 +194,12 @@ def parse_ibt_file(self, session_id):
                 logger.debug(f"Channel {channel} not available: {e}")
                 pass
 
+        send_processing_update(
+            session_id, 'processing', 30,
+            f'Extracted {len(telemetry_data)} telemetry channels',
+            'Segmenting laps'
+        )
+
         # Process laps using the 'Lap' channel for segmentation
         if telemetry_data and 'Lap' in telemetry_data:
             lap_numbers = telemetry_data['Lap']  # Array of lap numbers for each sample
@@ -167,7 +212,8 @@ def parse_ibt_file(self, session_id):
             logger.info(f"Found {len(unique_laps)} laps in session")
 
             # Process each lap
-            for lap_number in unique_laps:
+            total_laps = len(unique_laps)
+            for idx, lap_number in enumerate(unique_laps):
                 # Skip lap 0 (outlap/warmup)
                 if lap_number == 0:
                     continue
@@ -221,6 +267,20 @@ def parse_ibt_file(self, session_id):
 
                 logger.info(f"Created lap {lap_number}: {lap_time:.3f}s, {len(lap_indices)} samples")
 
+                # Send progress update for this lap
+                progress = 30 + int((idx / total_laps) * 60)  # 30-90% range for lap processing
+                send_processing_update(
+                    session_id, 'processing', progress,
+                    f'Processing lap {int(lap_number)} of {total_laps}',
+                    f'Lap {int(lap_number)}: {lap_time:.3f}s'
+                )
+
+            send_processing_update(
+                session_id, 'processing', 95,
+                'Identifying personal best',
+                'Analyzing lap times'
+            )
+
             # Mark the fastest lap as personal best (exclude lap 0 and laps with 0 time)
             fastest_lap = session.laps.exclude(lap_number=0).filter(lap_time__gt=0).order_by('lap_time').first()
             if fastest_lap:
@@ -265,7 +325,12 @@ def parse_ibt_file(self, session_id):
 
         logger.info(f"Successfully processed session {session_id}")
 
-        # TODO: Send WebSocket notification to user
+        # Send completion notification via WebSocket
+        send_processing_update(
+            session_id, 'completed', 100,
+            f'Processing complete! {session.laps.count()} laps created',
+            'Done'
+        )
 
         return {
             'status': 'completed',
@@ -279,6 +344,13 @@ def parse_ibt_file(self, session_id):
 
     except Exception as e:
         logger.error(f"Error processing session {session_id}: {str(e)}", exc_info=True)
+
+        # Send error notification via WebSocket
+        send_processing_update(
+            session_id, 'failed', 0,
+            f'Processing failed: {str(e)[:100]}',
+            'Error'
+        )
 
         # Update session with error
         try:

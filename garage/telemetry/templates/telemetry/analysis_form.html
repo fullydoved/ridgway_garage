@@ -12,10 +12,21 @@
 
 <div class="row">
     <div class="col-lg-8">
+        {% if initial_lap %}
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle"></i>
+            <strong>Starting with Lap {{ initial_lap.lap_number }}</strong> from {{ initial_lap.session.track.name|default:"session" }}
+            <br><small class="text-muted">This lap will be automatically added to your new analysis</small>
+        </div>
+        {% endif %}
+
         <div class="card">
             <div class="card-body">
                 <form method="post">
                     {% csrf_token %}
+                    {% if initial_lap %}
+                    <input type="hidden" name="lap_id" value="{{ initial_lap.pk }}">
+                    {% endif %}
 
                     <div class="mb-3">
                         <label for="{{ form.name.id_for_label }}" class="form-label">
@@ -108,10 +119,10 @@
             </div>
         </div>
 
-        {% if analysis %}
+        {% if not initial_lap %}
         <div class="alert alert-info mt-3">
             <i class="bi bi-info-circle"></i>
-            <strong>Next step:</strong> After saving, you can add laps to this analysis from your session detail pages.
+            <strong>Next step:</strong> After creating, you can add laps to this analysis from your session detail pages.
         </div>
         {% endif %}
     </div>

@@ -5,12 +5,9 @@ Views for the Ridgway Garage telemetry app.
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Min, Count, Q
-from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from django.utils import timezone
 
-from .models import Session, Lap, TelemetryData, Track, Car, Team, Driver, Analysis
+from .models import Session, Lap, TelemetryData, Analysis, Track, Car
 from .forms import SessionUploadForm, AnalysisForm
 
 
@@ -109,9 +106,23 @@ def session_detail(request, pk):
     # Get user's analyses for the "Add to Analysis" dropdown
     user_analyses = Analysis.objects.filter(driver=request.user).order_by('-updated_at')
 
-    # For each lap, get the analyses it belongs to
+    # For each lap, get the analyses it belongs to and annotate user_analyses
     for lap in laps:
         lap.user_analyses = lap.analyses.filter(driver=request.user)
+
+        # Get IDs of analyses this lap is already in
+        lap_analysis_ids = set(lap.analyses.values_list('id', flat=True))
+
+        # Annotate each user analysis with whether it contains this lap
+        lap.analyses_with_flag = []
+        for analysis in user_analyses:
+            analysis_copy = type('obj', (object,), {
+                'id': analysis.id,
+                'pk': analysis.pk,
+                'name': analysis.name,
+                'contains_this_lap': analysis.id in lap_analysis_ids
+            })()
+            lap.analyses_with_flag.append(analysis_copy)
 
     context = {
         'session': session,
@@ -168,7 +179,13 @@ def lap_detail(request, pk):
             gps_data_json = json.dumps(gps_data)
 
     # Get user's analyses for the "Add to Analysis" dropdown
+    # Annotate which analyses already contain this lap
     user_analyses = Analysis.objects.filter(driver=request.user).order_by('-updated_at')
+
+    # Check which analyses this lap is already in
+    lap_analyses = set(lap.analyses.values_list('id', flat=True))
+    for analysis in user_analyses:
+        analysis.contains_this_lap = analysis.id in lap_analyses
 
     context = {
         'lap': lap,
@@ -201,7 +218,8 @@ def upload(request):
 
             messages.success(
                 request,
-                'File uploaded successfully! Your telemetry is being processed. Track, car, and session details will be extracted automatically.'
+                'File uploaded successfully! Your telemetry is being processed. '
+                'Track, car, and session details will be extracted automatically.'
             )
             return redirect('telemetry:session_detail', pk=session.id)
     else:
@@ -282,7 +300,15 @@ def analysis_list(request):
 def analysis_create(request):
     """
     Create a new analysis.
+    Optionally accepts a lap_id to add that lap to the analysis on creation.
     """
+    # Get optional lap_id from query params
+    lap_id = request.GET.get('lap_id') or request.POST.get('lap_id')
+    initial_lap = None
+
+    if lap_id:
+        initial_lap = get_object_or_404(Lap, pk=lap_id, session__driver=request.user)
+
     if request.method == 'POST':
         form = AnalysisForm(request.POST, user=request.user)
         if form.is_valid():
@@ -290,13 +316,20 @@ def analysis_create(request):
             analysis.driver = request.user
             analysis.save()
 
-            messages.success(request, f'Analysis "{analysis.name}" created successfully!')
+            # Add the initial lap if provided
+            if initial_lap:
+                analysis.laps.add(initial_lap)
+                messages.success(request, f'Analysis "{analysis.name}" created with Lap {initial_lap.lap_number}!')
+            else:
+                messages.success(request, f'Analysis "{analysis.name}" created successfully!')
+
             return redirect('telemetry:analysis_detail', pk=analysis.pk)
     else:
         form = AnalysisForm(user=request.user)
 
     context = {
         'form': form,
+        'initial_lap': initial_lap,
     }
 
     return render(request, 'telemetry/analysis_form.html', context)
@@ -392,12 +425,17 @@ def analysis_delete(request, pk):
 def analysis_add_lap(request, pk, lap_id):
     """
     Add a lap to an analysis.
+    Prevents duplicate laps from being added.
     """
     analysis = get_object_or_404(Analysis, pk=pk, driver=request.user)
     lap = get_object_or_404(Lap, pk=lap_id, session__driver=request.user)
 
-    analysis.laps.add(lap)
-    messages.success(request, f'Lap {lap.lap_number} added to "{analysis.name}"')
+    # Check if lap is already in the analysis
+    if analysis.laps.filter(pk=lap_id).exists():
+        messages.warning(request, f'Lap {lap.lap_number} is already in "{analysis.name}"')
+    else:
+        analysis.laps.add(lap)
+        messages.success(request, f'Lap {lap.lap_number} added to "{analysis.name}"')
 
     # Redirect back to the referring page if available, otherwise to analysis detail
     referer = request.META.get('HTTP_REFERER')

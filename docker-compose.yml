@@ -47,8 +47,8 @@ services:
       - ./garage:/app
       - media_files:/app/media
       - static_files:/app/staticfiles
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     env_file:
       - .env
     environment:
@@ -62,6 +62,22 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - ridgway_network
+    restart: unless-stopped
+
+  # Nginx Web Server
+  nginx:
+    image: nginx:alpine
+    container_name: ridgway_garage_nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_files:/app/staticfiles:ro
+      - media_files:/app/media:ro
+    ports:
+      - "42069:80"
+    depends_on:
+      - web
     networks:
       - ridgway_network
     restart: unless-stopped
