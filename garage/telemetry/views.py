@@ -556,7 +556,7 @@ def lap_import(request):
     """
     import gzip
     import json
-    from django.utils.dateutil import parser as date_parser
+    from django.utils.dateparse import parse_datetime
     from decimal import Decimal
 
     if request.method == 'POST':
@@ -612,7 +612,9 @@ def lap_import(request):
 
             # Parse session date
             try:
-                session_date = date_parser.parse(data['session']['session_date'])
+                session_date = parse_datetime(data['session']['session_date'])
+                if not session_date:
+                    session_date = timezone.now()
             except:
                 session_date = timezone.now()
 
