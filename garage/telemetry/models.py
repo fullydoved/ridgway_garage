@@ -49,6 +49,14 @@ class Team(models.Model):
     is_public = models.BooleanField(default=False, help_text="Allow public viewing of team telemetry")
     allow_join_requests = models.BooleanField(default=True, help_text="Allow users to request to join")
 
+    # Discord integration
+    discord_webhook_url = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        help_text="Discord webhook URL for sharing laps to team channel"
+    )
+
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

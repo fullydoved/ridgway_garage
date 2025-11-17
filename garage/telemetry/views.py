@@ -684,6 +684,288 @@ def lap_import(request):
 
 
 # ================================
+# Discord Sharing Views
+# ================================
+
+@login_required
+def lap_share_to_discord(request, pk):
+    """
+    Share a lap to team's Discord channel via webhook.
+    Uploads .lap.gz file and posts formatted message with import links.
+    """
+    import gzip
+    import json
+    import base64
+    import requests
+    from datetime import datetime
+    from django.conf import settings
+
+    lap = get_object_or_404(
+        Lap.objects.select_related(
+            'session', 'session__track', 'session__car', 'session__driver', 'telemetry'
+        ),
+        pk=pk
+    )
+
+    # Check permissions
+    if lap.session.driver != request.user:
+        messages.error(request, "You don't have permission to share this lap.")
+        return redirect('telemetry:lap_detail', pk=pk)
+
+    # Check if user has a team with Discord webhook configured
+    try:
+        driver_profile = request.user.driver_profile
+        team = driver_profile.default_team
+        if not team or not team.discord_webhook_url:
+            messages.error(request, "No Discord webhook configured for your team. Contact your team admin.")
+            return redirect('telemetry:lap_detail', pk=pk)
+    except:
+        messages.error(request, "You need to join a team and configure Discord integration first.")
+        return redirect('telemetry:lap_detail', pk=pk)
+
+    # Get telemetry data
+    try:
+        telemetry = lap.telemetry
+    except TelemetryData.DoesNotExist:
+        messages.error(request, "No telemetry data available for this lap.")
+        return redirect('telemetry:lap_detail', pk=pk)
+
+    # Build export data (same as export view)
+    export_data = {
+        'format_version': '1.0',
+        'exported_at': datetime.utcnow().isoformat() + 'Z',
+        'lap': {
+            'lap_number': lap.lap_number,
+            'lap_time': float(lap.lap_time),
+            'sector1_time': float(lap.sector1_time) if lap.sector1_time else None,
+            'sector2_time': float(lap.sector2_time) if lap.sector2_time else None,
+            'sector3_time': float(lap.sector3_time) if lap.sector3_time else None,
+            'is_valid': lap.is_valid,
+        },
+        'session': {
+            'track_name': lap.session.track.name if lap.session.track else 'Unknown Track',
+            'track_config': lap.session.track.configuration if lap.session.track else '',
+            'car_name': lap.session.car.name if lap.session.car else 'Unknown Car',
+            'session_type': lap.session.session_type,
+            'session_date': lap.session.session_date.isoformat(),
+            'air_temp': float(lap.session.air_temp) if lap.session.air_temp else None,
+            'track_temp': float(lap.session.track_temp) if lap.session.track_temp else None,
+            'weather_type': lap.session.weather_type or '',
+        },
+        'driver': {
+            'display_name': lap.session.driver.driver_profile.display_name if hasattr(lap.session.driver, 'driver_profile') and lap.session.driver.driver_profile.display_name else lap.session.driver.username,
+        },
+        'telemetry': {
+            'sample_count': telemetry.sample_count,
+            'max_speed': float(telemetry.max_speed) if telemetry.max_speed else None,
+            'avg_speed': float(telemetry.avg_speed) if telemetry.avg_speed else None,
+            'data': telemetry.data,
+        }
+    }
+
+    # Convert to JSON and compress
+    json_data = json.dumps(export_data, indent=2)
+    compressed_data = gzip.compress(json_data.encode('utf-8'))
+
+    # Create base64-encoded data for protocol URL (uncompressed for smaller URL)
+    # Limit data to prevent huge URLs
+    protocol_data = {
+        'format_version': export_data['format_version'],
+        'exported_at': export_data['exported_at'],
+        'lap': export_data['lap'],
+        'session': export_data['session'],
+        'driver': export_data['driver'],
+        'telemetry': {
+            'sample_count': export_data['telemetry']['sample_count'],
+            'max_speed': export_data['telemetry']['max_speed'],
+            'avg_speed': export_data['telemetry']['avg_speed'],
+            'data': export_data['telemetry']['data'],
+        }
+    }
+    protocol_json = json.dumps(protocol_data)
+    base64_data = base64.urlsafe_b64encode(protocol_json.encode('utf-8')).decode('utf-8')
+
+    # Generate filename
+    track_name = (lap.session.track.name if lap.session.track else 'Unknown').replace(' ', '_')
+    car_name = (lap.session.car.name if lap.session.car else 'Unknown').replace(' ', '_')
+    lap_time_str = f"{lap.lap_time:.3f}".replace('.', '_')
+    filename = f"{track_name}_{car_name}_{lap_time_str}.lap.gz"
+
+    # Get driver display name
+    driver_name = lap.session.driver.driver_profile.display_name if hasattr(lap.session.driver, 'driver_profile') and lap.session.driver.driver_profile.display_name else lap.session.driver.username
+
+    # Format Discord message
+    track_display = lap.session.track.name if lap.session.track else 'Unknown Track'
+    if lap.session.track and lap.session.track.configuration:
+        track_display += f" - {lap.session.track.configuration}"
+
+    car_display = lap.session.car.name if lap.session.car else 'Unknown Car'
+    lap_status = "Valid" if lap.is_valid else "Invalid"
+    session_date = lap.session.session_date.strftime("%b %d, %Y %H:%M")
+
+    weather_info = ""
+    if lap.session.air_temp:
+        weather_info = f"\n🌡️ Weather: {lap.session.weather_type or 'Clear'}, {lap.session.air_temp}°C"
+
+    # Build import URLs
+    protocol_url = f"ridgway://import/{base64_data[:100]}"  # Truncate if too long
+    http_url = f"http://localhost:8000/laps/import/protocol/{base64_data[:100]}/"
+
+    discord_message = f"""📊 **New Lap Shared to Team**
+━━━━━━━━━━━━━━━━━━━━━
+👤 **Driver:** {driver_name}
+🏁 **Track:** {track_display}
+🏎️ **Car:** {car_display}
+⏱️ **Time:** {lap.lap_time}s ({lap_status})
+📅 **Date:** {session_date}{weather_info}
+
+📥 **Import Options:**
+• One-Click: `{protocol_url}`
+• Browser: <{http_url}>
+
+💾 Or download the .lap.gz attachment below
+"""
+
+    try:
+        # Post to Discord webhook
+        files = {
+            'file': (filename, compressed_data, 'application/gzip')
+        }
+        payload = {
+            'content': discord_message
+        }
+
+        response = requests.post(
+            team.discord_webhook_url,
+            data=payload,
+            files=files,
+            timeout=10
+        )
+
+        if response.status_code in [200, 204]:
+            messages.success(request, f'Lap shared to {team.name} Discord channel!')
+        else:
+            messages.error(request, f'Failed to share to Discord: {response.status_code} - {response.text}')
+
+    except requests.exceptions.RequestException as e:
+        messages.error(request, f'Error connecting to Discord: {str(e)}')
+    except Exception as e:
+        messages.error(request, f'Error sharing lap: {str(e)}')
+
+    return redirect('telemetry:lap_detail', pk=pk)
+
+
+@login_required
+def protocol_import(request, base64_data):
+    """
+    Import a lap from base64-encoded protocol URL.
+    Handles both ridgway:// and http://localhost:8000/laps/import/protocol/ URLs.
+    """
+    import base64
+    import json
+    from decimal import Decimal
+
+    try:
+        # Decode base64 data
+        json_data = base64.urlsafe_b64decode(base64_data.encode('utf-8')).decode('utf-8')
+        data = json.loads(json_data)
+
+        # Validate format version
+        if data.get('format_version') != '1.0':
+            messages.error(request, f"Unsupported format version: {data.get('format_version')}")
+            return redirect('telemetry:lap_import')
+
+        # Validate required fields
+        required_fields = ['lap', 'session', 'driver', 'telemetry']
+        for field in required_fields:
+            if field not in data:
+                messages.error(request, f"Invalid data format: missing '{field}' field.")
+                return redirect('telemetry:lap_import')
+
+        # Get or create Track
+        track_name = data['session'].get('track_name', 'Unknown Track')
+        track_config = data['session'].get('track_config', '')
+        track, _ = Track.objects.get_or_create(
+            name=track_name,
+            configuration=track_config,
+            defaults={'name': track_name, 'configuration': track_config}
+        )
+
+        # Get or create Car
+        car_name = data['session'].get('car_name', 'Unknown Car')
+        car, _ = Car.objects.get_or_create(
+            name=car_name,
+            defaults={'name': car_name}
+        )
+
+        # Parse session date
+        try:
+            session_date = parse_datetime(data['session']['session_date'])
+            if not session_date:
+                session_date = timezone.now()
+        except:
+            session_date = timezone.now()
+
+        # Create Session
+        session = Session.objects.create(
+            driver=request.user,
+            team=request.user.driver_profile.default_team if hasattr(request.user, 'driver_profile') else None,
+            track=track,
+            car=car,
+            session_type='imported',
+            session_date=session_date,
+            processing_status='completed',
+            air_temp=Decimal(str(data['session']['air_temp'])) if data['session'].get('air_temp') is not None else None,
+            track_temp=Decimal(str(data['session']['track_temp'])) if data['session'].get('track_temp') is not None else None,
+            weather_type=data['session'].get('weather_type', ''),
+            is_public=False,
+        )
+
+        # Create Lap
+        lap_data = data['lap']
+        lap = Lap.objects.create(
+            session=session,
+            lap_number=lap_data.get('lap_number', 1),
+            lap_time=Decimal(str(lap_data['lap_time'])),
+            sector1_time=Decimal(str(lap_data['sector1_time'])) if lap_data.get('sector1_time') is not None else None,
+            sector2_time=Decimal(str(lap_data['sector2_time'])) if lap_data.get('sector2_time') is not None else None,
+            sector3_time=Decimal(str(lap_data['sector3_time'])) if lap_data.get('sector3_time') is not None else None,
+            is_valid=lap_data.get('is_valid', True),
+        )
+
+        # Create TelemetryData
+        telemetry_data = data['telemetry']
+        TelemetryData.objects.create(
+            lap=lap,
+            data=telemetry_data['data'],
+            sample_count=telemetry_data.get('sample_count', len(telemetry_data['data'].get('Distance', []))),
+            max_speed=Decimal(str(telemetry_data['max_speed'])) if telemetry_data.get('max_speed') is not None else None,
+            avg_speed=Decimal(str(telemetry_data['avg_speed'])) if telemetry_data.get('avg_speed') is not None else None,
+        )
+
+        # Get driver display name from imported data
+        imported_driver_name = data['driver'].get('display_name', 'Unknown Driver')
+
+        messages.success(
+            request,
+            f"Lap imported from Discord! {imported_driver_name}'s lap on {track_name} ({car_name}) - {lap.lap_time}s"
+        )
+
+        # Redirect to lap detail
+        return redirect('telemetry:lap_detail', pk=lap.pk)
+
+    except base64.binascii.Error:
+        messages.error(request, 'Invalid import link: malformed data.')
+        return redirect('telemetry:lap_import')
+    except json.JSONDecodeError as e:
+        messages.error(request, f'Invalid import link: {str(e)}')
+        return redirect('telemetry:lap_import')
+    except Exception as e:
+        messages.error(request, f'Error importing lap: {str(e)}')
+        return redirect('telemetry:lap_import')
+
+
+# ================================
 # System Update Views
 # ================================
 

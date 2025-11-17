@@ -22,7 +22,9 @@ urlpatterns = [
     # Lap views
     path('laps/<int:pk>/', views.lap_detail, name='lap_detail'),
     path('laps/<int:pk>/export/', views.lap_export, name='lap_export'),
+    path('laps/<int:pk>/share-to-discord/', views.lap_share_to_discord, name='lap_share_to_discord'),
     path('laps/import/', views.lap_import, name='lap_import'),
+    path('laps/import/protocol/<str:base64_data>/', views.protocol_import, name='protocol_import'),
     path('compare/', views.lap_compare, name='lap_compare'),
 
     # Analysis (lap comparison)
