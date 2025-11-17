@@ -962,6 +962,12 @@ def lap_share_to_discord(request, pk, team_id):
     if lap.session.air_temp:
         weather_info = f"\n🌡️ Weather: {lap.session.weather_type or 'Clear'}, {lap.session.air_temp}°C"
 
+    # Get optional notes from POST data
+    notes = request.POST.get('notes', '').strip()
+    notes_section = ""
+    if notes:
+        notes_section = f"\n\n📝 **Notes:**\n> {notes}\n"
+
     # Build import URLs
     protocol_url = f"ridgway://import/{base64_data[:100]}"  # Truncate if too long
     http_url = f"http://localhost:8000/laps/import/protocol/{base64_data[:100]}/"
@@ -972,7 +978,7 @@ def lap_share_to_discord(request, pk, team_id):
 🏁 **Track:** {track_display}
 🏎️ **Car:** {car_display}
 ⏱️ **Time:** {lap.lap_time}s ({lap_status})
-📅 **Date:** {session_date}{weather_info}
+📅 **Date:** {session_date}{weather_info}{notes_section}
 
 📥 **Import Options:**
 • One-Click: `{protocol_url}`

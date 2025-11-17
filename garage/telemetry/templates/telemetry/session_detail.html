@@ -110,9 +110,9 @@
                                         <ul class="dropdown-menu">
                                             {% for team in user_teams_with_discord %}
                                             <li>
-                                                <a class="dropdown-item" href="{% url 'telemetry:lap_share_to_discord' lap.pk team.pk %}">
+                                                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#shareModalLap{{ lap.pk }}Team{{ team.pk }}">
                                                     {{ team.name }}
-                                                </a>
+                                                </button>
                                             </li>
                                             {% endfor %}
                                         </ul>
@@ -254,4 +254,47 @@
     };
 </script>
 {% endif %}
+
+<!-- Discord Share Modals -->
+{% for lap in laps %}
+    {% for team in user_teams_with_discord %}
+    <div class="modal fade" id="shareModalLap{{ lap.pk }}Team{{ team.pk }}" tabindex="-1" aria-labelledby="shareModalLabelLap{{ lap.pk }}Team{{ team.pk }}" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="post" action="{% url 'telemetry:lap_share_to_discord' lap.pk team.pk %}">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="shareModalLabelLap{{ lap.pk }}Team{{ team.pk }}">
+                            <i class="bi bi-discord"></i> Share Lap {{ lap.lap_number }} to {{ team.name }}
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="notesLap{{ lap.pk }}Team{{ team.pk }}" class="form-label">Notes (Optional)</label>
+                            <textarea class="form-control" id="notesLap{{ lap.pk }}Team{{ team.pk }}" name="notes" rows="4" placeholder="E.g., Baseline setup, Changed front wing, First run on new tires..."></textarea>
+                            <small class="form-text text-muted">Add context about this lap (setup changes, conditions, feedback, etc.)</small>
+                        </div>
+                        <div class="alert alert-info mb-0">
+                            <strong>Sharing:</strong>
+                            <ul class="mb-0 mt-2">
+                                <li>Lap {{ lap.lap_number }}</li>
+                                <li>Time: {{ lap.lap_time }}s</li>
+                                <li>Destination: {{ team.name }} Discord</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-info">
+                            <i class="bi bi-discord"></i> Share to Discord
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+{% endfor %}
+
 {% endblock %}
