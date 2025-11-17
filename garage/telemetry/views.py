@@ -125,11 +125,18 @@ def session_detail(request, pk):
             })()
             lap.analyses_with_flag.append(analysis_copy)
 
+    # Get teams user belongs to that have Discord webhooks configured
+    user_teams_with_discord = Team.objects.filter(
+        members=request.user,
+        discord_webhook_url__isnull=False
+    ).exclude(discord_webhook_url='')
+
     context = {
         'session': session,
         'laps': laps,
         'best_lap': laps.filter(is_valid=True).order_by('lap_time').first(),
         'user_analyses': user_analyses,
+        'user_teams_with_discord': user_teams_with_discord,
     }
 
     return render(request, 'telemetry/session_detail.html', context)
@@ -188,6 +195,14 @@ def lap_detail(request, pk):
     for analysis in user_analyses:
         analysis.contains_this_lap = analysis.id in lap_analyses
 
+    # Get teams user belongs to that have Discord webhooks configured
+    user_teams_with_discord = []
+    if request.user.is_authenticated:
+        user_teams_with_discord = Team.objects.filter(
+            members=request.user,
+            discord_webhook_url__isnull=False
+        ).exclude(discord_webhook_url='')
+
     context = {
         'lap': lap,
         'session': lap.session,
@@ -195,6 +210,7 @@ def lap_detail(request, pk):
         'combined_chart': combined_chart,
         'gps_data_json': gps_data_json,
         'user_analyses': user_analyses,
+        'user_teams_with_discord': user_teams_with_discord,
     }
 
     return render(request, 'telemetry/lap_detail.html', context)
@@ -825,7 +841,7 @@ def lap_import(request):
 # ================================
 
 @login_required
-def lap_share_to_discord(request, pk):
+def lap_share_to_discord(request, pk, team_id):
     """
     Share a lap to team's Discord channel via webhook.
     Uploads .lap.gz file and posts formatted message with import links.
@@ -849,15 +865,17 @@ def lap_share_to_discord(request, pk):
         messages.error(request, "You don't have permission to share this lap.")
         return redirect('telemetry:lap_detail', pk=pk)
 
-    # Check if user has a team with Discord webhook configured
-    try:
-        driver_profile = request.user.driver_profile
-        team = driver_profile.default_team
-        if not team or not team.discord_webhook_url:
-            messages.error(request, "No Discord webhook configured for your team. Contact your team admin.")
-            return redirect('telemetry:lap_detail', pk=pk)
-    except:
-        messages.error(request, "You need to join a team and configure Discord integration first.")
+    # Get the team and check membership
+    team = get_object_or_404(Team, pk=team_id)
+
+    # Check if user is a member of this team
+    if request.user not in team.members.all():
+        messages.error(request, f"You are not a member of {team.name}.")
+        return redirect('telemetry:lap_detail', pk=pk)
+
+    # Check if team has Discord webhook configured
+    if not team.discord_webhook_url:
+        messages.error(request, f"{team.name} doesn't have a Discord webhook configured.")
         return redirect('telemetry:lap_detail', pk=pk)
 
     # Get telemetry data
