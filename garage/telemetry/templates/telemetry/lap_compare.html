@@ -1,4 +1,5 @@
 {% extends 'telemetry/base.html' %}
+{% load telemetry_filters %}
 
 {% block title %}Compare Laps - Ridgway Garage{% endblock %}
 
@@ -18,7 +19,7 @@
                 <h5>Selected Laps:</h5>
                 <ul>
                     {% for lap in laps %}
-                    <li>Lap {{ lap.lap_number }}: {{ lap.lap_time|floatformat:3 }}s ({{ lap.session.track.name }})</li>
+                    <li>Lap {{ lap.lap_number }}: {{ lap.lap_time|format_laptime }} ({{ lap.session.track.name }})</li>
                     {% endfor %}
                 </ul>
             </div>

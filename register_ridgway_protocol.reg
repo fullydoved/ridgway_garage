@@ -1,0 +1,15 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CLASSES_ROOT\ridgway]
+@="URL:Ridgway Garage Protocol"
+"URL Protocol"=""
+
+[HKEY_CLASSES_ROOT\ridgway\DefaultIcon]
+@="\"C:\\Windows\\System32\\SHELL32.dll\",1"
+
+[HKEY_CLASSES_ROOT\ridgway\shell]
+
+[HKEY_CLASSES_ROOT\ridgway\shell\open]
+
+[HKEY_CLASSES_ROOT\ridgway\shell\open\command]
+@="\"C:\\Program Files\\Mozilla Firefox\\firefox.exe\" \"http://localhost:42069/laps/import/protocol/%1\""

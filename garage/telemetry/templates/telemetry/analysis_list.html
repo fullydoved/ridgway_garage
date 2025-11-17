@@ -1,4 +1,5 @@
 {% extends 'telemetry/base.html' %}
+{% load telemetry_filters %}
 
 {% block title %}My Analyses{% endblock %}
 
@@ -30,7 +31,7 @@
                     <small class="text-muted">
                         <i class="bi bi-stopwatch"></i> {{ analysis.lap_count }} lap{{ analysis.lap_count|pluralize }}
                         {% if analysis.fastest_lap %}
-                        <br><i class="bi bi-trophy"></i> Fastest: {{ analysis.fastest_lap.lap_time }}s
+                        <br><i class="bi bi-trophy"></i> Fastest: {{ analysis.fastest_lap.lap_time|format_laptime }}
                         {% endif %}
                     </small>
                 </div>

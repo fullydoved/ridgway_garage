@@ -1,4 +1,5 @@
 {% extends 'telemetry/base.html' %}
+{% load telemetry_filters %}
 
 {% block title %}{{ session.track.name }} - Session Detail{% endblock %}
 
@@ -67,7 +68,7 @@
                                 <td>{{ lap.lap_number }}</td>
                                 <td>
                                     <span class="lap-time {% if lap.is_valid %}valid{% else %}invalid{% endif %}">
-                                        {{ lap.lap_time|floatformat:3 }}s
+                                        {{ lap.lap_time|format_laptime }}
                                     </span>
                                     {% if lap.is_personal_best %}
                                     <span class="badge bg-warning text-dark ms-1">
@@ -279,7 +280,7 @@
                             <strong>Sharing:</strong>
                             <ul class="mb-0 mt-2">
                                 <li>Lap {{ lap.lap_number }}</li>
-                                <li>Time: {{ lap.lap_time }}s</li>
+                                <li>Time: {{ lap.lap_time|format_laptime }}</li>
                                 <li>Destination: {{ team.name }} Discord</li>
                             </ul>
                         </div>

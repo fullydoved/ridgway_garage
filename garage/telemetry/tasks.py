@@ -115,22 +115,32 @@ def parse_ibt_file(self, session_id):
                 session.track = track
                 logger.info(f"Auto-detected track: {track_name} {track_config}")
 
-        # Auto-detect car if not specified
-        if not session.car and 'DriverInfo' in session_info:
+        # Auto-detect car and driver name if not specified
+        if 'DriverInfo' in session_info:
             drivers = session_info['DriverInfo'].get('Drivers', [])
             if drivers:
-                # Get the user's car (index 0 is typically the player)
-                car_name = drivers[0].get('CarScreenName', '').strip()
-                if car_name:
-                    car_class = drivers[0].get('CarClassShortName') or ''
-                    car, created = Car.objects.get_or_create(
-                        name=car_name,
-                        defaults={
-                            'car_class': car_class
-                        }
-                    )
-                    session.car = car
-                    logger.info(f"Auto-detected car: {car_name}")
+                # Get the user's info (index 0 is typically the player)
+                driver_info = drivers[0]
+
+                # Extract driver name
+                driver_name = driver_info.get('UserName', '').strip()
+                if driver_name:
+                    session.driver_name = driver_name
+                    logger.info(f"Extracted driver name: {driver_name}")
+
+                # Extract car info
+                if not session.car:
+                    car_name = driver_info.get('CarScreenName', '').strip()
+                    if car_name:
+                        car_class = driver_info.get('CarClassShortName') or ''
+                        car, created = Car.objects.get_or_create(
+                            name=car_name,
+                            defaults={
+                                'car_class': car_class
+                            }
+                        )
+                        session.car = car
+                        logger.info(f"Auto-detected car: {car_name}")
 
         # Extract session type
         if 'SessionInfo' in session_info and 'Sessions' in session_info['SessionInfo']:

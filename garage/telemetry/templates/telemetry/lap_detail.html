@@ -1,4 +1,5 @@
 {% extends 'telemetry/base.html' %}
+{% load telemetry_filters %}
 
 {% block title %}Lap {{ lap.lap_number }} - {{ session.track.name }}{% endblock %}
 
@@ -174,7 +175,7 @@
                 </p>
             </div>
             <div class="text-end">
-                <div class="stat-value">{{ lap.lap_time|floatformat:3 }}s</div>
+                <div class="stat-value">{{ lap.lap_time|format_laptime }}</div>
                 <div class="stat-label">Lap Time</div>
             </div>
         </div>
@@ -201,7 +202,7 @@
                 <h5 class="mb-0 d-inline">
                     <i class="bi bi-geo-alt"></i> Track Map
                 </h5>
-                <small class="text-muted ms-3">Lap {{ lap.lap_number }} - {{ lap.lap_time|floatformat:3 }}s</small>
+                <small class="text-muted ms-3">Lap {{ lap.lap_number }} - {{ lap.lap_time|format_laptime }}</small>
             </div>
             <div class="d-flex align-items-center gap-3">
                 <small class="text-muted">Yellow marker follows your cursor</small>
@@ -320,7 +321,7 @@
                         <div class="stat-label">Data Samples</div>
                     </div>
                     <div class="col-md-3 stat-item">
-                        <div class="stat-value">{{ lap.lap_time|floatformat:3 }}s</div>
+                        <div class="stat-value">{{ lap.lap_time|format_laptime }}</div>
                         <div class="stat-label">Lap Time</div>
                     </div>
                 </div>
@@ -598,7 +599,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <strong>Sharing:</strong>
                         <ul class="mb-0 mt-2">
                             <li>{{ session.track.name }} - {{ session.car.name }}</li>
-                            <li>Lap Time: {{ lap.lap_time }}s</li>
+                            <li>Lap Time: {{ lap.lap_time|format_laptime }}</li>
                             <li>Destination: {{ team.name }} Discord</li>
                         </ul>
                     </div>

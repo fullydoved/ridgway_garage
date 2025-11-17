@@ -1,4 +1,5 @@
 {% extends 'telemetry/base.html' %}
+{% load telemetry_filters %}
 
 {% block title %}Dashboard - Ridgway Garage{% endblock %}
 
@@ -46,7 +47,7 @@
                 <div class="stat-label mb-2">Best Lap</div>
                 <div class="stat-value text-warning">
                     {% if stats.best_lap %}
-                        {{ stats.best_lap.lap_time|floatformat:3 }}s
+                        {{ stats.best_lap.lap_time|format_laptime }}
                     {% else %}
                         --
                     {% endif %}
@@ -104,7 +105,7 @@
                                 <td>{{ session.laps.count }}</td>
                                 <td>
                                     {% if session.best_lap %}
-                                    <span class="lap-time fastest">{{ session.best_lap.lap_time|floatformat:3 }}s</span>
+                                    <span class="lap-time fastest">{{ session.best_lap.lap_time|format_laptime }}</span>
                                     {% else %}
                                     <span class="text-muted">--</span>
                                     {% endif %}

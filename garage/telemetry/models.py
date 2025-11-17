@@ -170,6 +170,7 @@ class Session(models.Model):
     # Session details
     session_type = models.CharField(max_length=20, choices=SESSION_TYPE_CHOICES, default='practice')
     session_date = models.DateTimeField(default=timezone.now, help_text="When the session occurred")
+    driver_name = models.CharField(max_length=100, blank=True, default='', help_text="Driver name from iRacing (not username)")
 
     # File reference
     ibt_file = models.FileField(

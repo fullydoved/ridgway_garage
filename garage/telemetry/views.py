@@ -671,7 +671,7 @@ def lap_export(request, pk):
             'weather_type': lap.session.weather_type or '',
         },
         'driver': {
-            'display_name': lap.session.driver.driver_profile.display_name if hasattr(lap.session.driver, 'driver_profile') and lap.session.driver.driver_profile.display_name else lap.session.driver.username,
+            'display_name': lap.session.driver_name or lap.session.driver.username,
         },
         'telemetry': {
             'sample_count': telemetry.sample_count,
@@ -908,7 +908,7 @@ def lap_share_to_discord(request, pk, team_id):
             'weather_type': lap.session.weather_type or '',
         },
         'driver': {
-            'display_name': lap.session.driver.driver_profile.display_name if hasattr(lap.session.driver, 'driver_profile') and lap.session.driver.driver_profile.display_name else lap.session.driver.username,
+            'display_name': lap.session.driver_name or lap.session.driver.username,
         },
         'telemetry': {
             'sample_count': telemetry.sample_count,
@@ -922,32 +922,14 @@ def lap_share_to_discord(request, pk, team_id):
     json_data = json.dumps(export_data, indent=2)
     compressed_data = gzip.compress(json_data.encode('utf-8'))
 
-    # Create base64-encoded data for protocol URL (uncompressed for smaller URL)
-    # Limit data to prevent huge URLs
-    protocol_data = {
-        'format_version': export_data['format_version'],
-        'exported_at': export_data['exported_at'],
-        'lap': export_data['lap'],
-        'session': export_data['session'],
-        'driver': export_data['driver'],
-        'telemetry': {
-            'sample_count': export_data['telemetry']['sample_count'],
-            'max_speed': export_data['telemetry']['max_speed'],
-            'avg_speed': export_data['telemetry']['avg_speed'],
-            'data': export_data['telemetry']['data'],
-        }
-    }
-    protocol_json = json.dumps(protocol_data)
-    base64_data = base64.urlsafe_b64encode(protocol_json.encode('utf-8')).decode('utf-8')
-
     # Generate filename
     track_name = (lap.session.track.name if lap.session.track else 'Unknown').replace(' ', '_')
     car_name = (lap.session.car.name if lap.session.car else 'Unknown').replace(' ', '_')
     lap_time_str = f"{lap.lap_time:.3f}".replace('.', '_')
     filename = f"{track_name}_{car_name}_{lap_time_str}.lap.gz"
 
-    # Get driver display name
-    driver_name = lap.session.driver.driver_profile.display_name if hasattr(lap.session.driver, 'driver_profile') and lap.session.driver.driver_profile.display_name else lap.session.driver.username
+    # Get driver display name from iRacing (not website username)
+    driver_name = lap.session.driver_name or lap.session.driver.username
 
     # Format Discord message
     track_display = lap.session.track.name if lap.session.track else 'Unknown Track'
@@ -968,23 +950,24 @@ def lap_share_to_discord(request, pk, team_id):
     if notes:
         notes_section = f"\n\n📝 **Notes:**\n> {notes}\n"
 
-    # Build import URLs
-    protocol_url = f"ridgway://import/{base64_data[:100]}"  # Truncate if too long
-    http_url = f"http://localhost:8000/laps/import/protocol/{base64_data[:100]}/"
+    # Format lap time as mm:ss.mmm
+    total_seconds = float(lap.lap_time)
+    minutes = int(total_seconds // 60)
+    seconds = total_seconds % 60
+    if minutes > 0:
+        formatted_time = f"{minutes}:{seconds:06.3f}"
+    else:
+        formatted_time = f"{seconds:.3f}s"
 
     discord_message = f"""📊 **New Lap Shared to Team**
 ━━━━━━━━━━━━━━━━━━━━━
 👤 **Driver:** {driver_name}
 🏁 **Track:** {track_display}
 🏎️ **Car:** {car_display}
-⏱️ **Time:** {lap.lap_time}s ({lap_status})
+⏱️ **Time:** {formatted_time} ({lap_status})
 📅 **Date:** {session_date}{weather_info}{notes_section}
 
-📥 **Import Options:**
-• One-Click: `{protocol_url}`
-• Browser: <{http_url}>
-
-💾 Or download the .lap.gz attachment below
+💾 Download the .lap.gz attachment below to import
 """
 
     try:

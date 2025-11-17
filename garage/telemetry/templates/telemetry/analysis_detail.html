@@ -1,4 +1,5 @@
 {% extends 'telemetry/base.html' %}
+{% load telemetry_filters %}
 
 {% block title %}{{ analysis.name }}{% endblock %}
 
@@ -80,7 +81,7 @@
                         </td>
                         <td>Lap {{ lap.lap_number }}</td>
                         <td>
-                            <strong>{{ lap.lap_time }}s</strong>
+                            <strong>{{ lap.lap_time|format_laptime }}</strong>
                             {% if lap.is_personal_best %}
                             <span class="badge bg-warning text-dark">
                                 <i class="bi bi-trophy-fill"></i> PB

@@ -1,4 +1,5 @@
 {% extends 'telemetry/base.html' %}
+{% load telemetry_filters %}
 
 {% block title %}My Sessions - Ridgway Garage{% endblock %}
 
@@ -96,7 +97,7 @@
                                 <div>
                                     Best: <span class="lap-time">
                                         {% with best=session.laps.all|dictsort:"lap_time"|first %}
-                                            {{ best.lap_time|floatformat:3 }}s
+                                            {{ best.lap_time|format_laptime }}
                                         {% endwith %}
                                     </span>
                                 </div>
