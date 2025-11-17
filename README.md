@@ -12,6 +12,7 @@ A comprehensive web application for analyzing iRacing telemetry data, comparing 
 - 👥 **Team Collaboration** - Share analyses with team members
 - 🔐 **Authentication** - Secure login with Discord OAuth integration
 - 📦 **Large File Support** - Upload IBT files up to 2GB (handles Nurburgring endurance sessions)
+- 🔄 **Auto-Update System** - One-click system updates with automatic backup and rollback (admin only)
 
 ## Tech Stack
 
