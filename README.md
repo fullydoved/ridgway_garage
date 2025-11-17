@@ -279,7 +279,16 @@ The `docker-compose.yml` defines the following services:
 - **celery_worker** - Background task processor
 - **celery_beat** - Scheduled task scheduler
 
-All services are connected via a private network and data is persisted in Docker volumes.
+### Network Isolation
+
+All services are connected via a **private Docker network** (`ridgway_network`) with the following benefits:
+
+✅ **No Port Conflicts** - PostgreSQL and Redis do NOT expose ports to your host machine, so they won't conflict with system installations
+✅ **Isolated Environment** - Services communicate internally using container names (e.g., `db:5432`, `redis:6379`)
+✅ **Secure by Default** - Database and Redis are only accessible from within the Docker network
+✅ **Only Port 8000 Exposed** - The web application is accessible at `http://localhost:8000`
+
+This means you can run Ridgway Garage alongside your system PostgreSQL/Redis without any conflicts!
 
 ---
 
@@ -385,8 +394,35 @@ docker compose exec web python manage.py shell
 
 ### Accessing Database
 
+The PostgreSQL and Redis ports are NOT exposed to the host machine to prevent conflicts with system installations. To access them:
+
+**PostgreSQL**:
 ```bash
+# Access PostgreSQL shell
 docker compose exec db psql -U postgres ridgway_garage
+
+# Run SQL commands
+docker compose exec db psql -U postgres -d ridgway_garage -c "SELECT COUNT(*) FROM telemetry_session;"
+```
+
+**Redis**:
+```bash
+# Access Redis CLI
+docker compose exec redis redis-cli
+
+# Check keys
+docker compose exec redis redis-cli KEYS '*'
+```
+
+**If you need external access** (for tools like pgAdmin or Redis Desktop Manager), temporarily add port mappings to docker-compose.yml:
+```yaml
+db:
+  ports:
+    - "5433:5432"  # Use different host port to avoid conflicts
+
+redis:
+  ports:
+    - "6380:6379"  # Use different host port to avoid conflicts
 ```
 
 ---
