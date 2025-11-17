@@ -138,7 +138,7 @@
                     <i class="bi bi-download"></i> Export Lap
                 </a>
 
-                {% if user.driver_profile.default_team.discord_webhook_url %}
+                {% if user.is_authenticated and user.driver_profile and user.driver_profile.default_team and user.driver_profile.default_team.discord_webhook_url %}
                 <a href="{% url 'telemetry:lap_share_to_discord' lap.pk %}" class="btn btn-info">
                     <i class="bi bi-discord"></i> Share to Discord
                 </a>
