@@ -638,8 +638,13 @@ def create_comparison_chart(laps):
     if len(lap_data) < 2:
         return None
 
+    # Sort by lap time to find the fastest (baseline for delta)
+    lap_data_sorted = sorted(lap_data, key=lambda x: x['lap'].lap_time)
+    fastest_lap = lap_data_sorted[0]
+
     # Determine which charts we can create (based on first lap's data)
     first_data = lap_data[0]['data']
+    has_delta = 'SessionTime' in first_data and 'LapDist' in first_data
     has_speed = 'Speed' in first_data and 'LapDist' in first_data
     has_inputs = 'Throttle' in first_data or 'Brake' in first_data
     has_steering = 'SteeringWheelAngle' in first_data
@@ -652,13 +657,15 @@ def create_comparison_chart(laps):
         if any(f'{tire}temp{zone}' in first_data for zone in ['L', 'M', 'R']):
             tires_with_data.append(tire)
 
-    # Count subplots (including tire temps)
-    subplot_count = sum([has_speed, has_inputs, has_steering, has_rpm]) + len(tires_with_data)
+    # Count subplots (including delta and tire temps)
+    subplot_count = sum([has_delta, has_speed, has_inputs, has_steering, has_rpm]) + len(tires_with_data)
     if subplot_count == 0:
         return None
 
     # Create subplot titles
     subplot_titles = []
+    if has_delta:
+        subplot_titles.append('Time Delta vs Fastest Lap')
     if has_speed:
         subplot_titles.append('Speed Comparison')
     if has_inputs:
@@ -666,10 +673,18 @@ def create_comparison_chart(laps):
     if has_steering:
         subplot_titles.append('Steering Angle Comparison')
     if has_rpm:
-        subplot_titles.append('RPM Comparison')
+        subplot_titles.append('RPM and Gear Comparison')
     # Add one title per tire
     for tire in tires_with_data:
         subplot_titles.append(f'{tire_names[tire]} Tire Temps')
+
+    # Create subplot specs - RPM chart needs secondary_y for gear
+    specs = []
+    for i, title in enumerate(subplot_titles):
+        if 'RPM and Gear' in title:
+            specs.append([{"secondary_y": True}])
+        else:
+            specs.append([{"secondary_y": False}])
 
     # Create subplots with shared x-axis
     fig = make_subplots(
@@ -677,10 +692,79 @@ def create_comparison_chart(laps):
         shared_xaxes=True,
         vertical_spacing=0.03,
         subplot_titles=subplot_titles,
+        specs=specs,
         row_heights=[1] * subplot_count
     )
 
     current_row = 1
+
+    # Add Time Delta comparison (first subplot)
+    if has_delta:
+        import numpy as np
+
+        for i, lap_info in enumerate(lap_data):
+            lap = lap_info['lap']
+            data = lap_info['data']
+
+            # Skip the fastest lap (it's the 0 line)
+            if lap == fastest_lap['lap']:
+                continue
+
+            try:
+                # Get distance and time arrays for this lap
+                lap_distance = np.array(data['LapDist'])
+                lap_time = np.array(data['SessionTime'])
+
+                # Get distance and time arrays for fastest lap
+                fastest_distance = np.array(fastest_lap['data']['LapDist'])
+                fastest_time = np.array(fastest_lap['data']['SessionTime'])
+
+                # Normalize both to start at 0
+                lap_time = lap_time - lap_time[0]
+                fastest_time = fastest_time - fastest_time[0]
+
+                # Find common distance range
+                min_dist = max(lap_distance[0], fastest_distance[0])
+                max_dist = min(lap_distance[-1], fastest_distance[-1])
+
+                # Create common distance array for comparison (every 10 meters)
+                common_distance = np.arange(min_dist, max_dist, 10)
+
+                # Interpolate both laps' times to the common distance points
+                lap_time_interp = np.interp(common_distance, lap_distance, lap_time)
+                fastest_time_interp = np.interp(common_distance, fastest_distance, fastest_time)
+
+                # Calculate delta (positive = slower, negative = faster)
+                time_delta = lap_time_interp - fastest_time_interp
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=common_distance,
+                        y=time_delta,
+                        mode='lines',
+                        name=f'Lap {lap.lap_number} (+{lap.lap_time - fastest_lap["lap"].lap_time:.3f}s)',
+                        line=dict(color=lap_info['color'], width=2),
+                        hovertemplate='<b>%{fullData.name}</b><br>Distance: %{x:.0f}m<br>Delta: %{y:+.3f}s<extra></extra>',
+                        showlegend=False,
+                        fill='tozeroy',
+                        fillcolor=f'rgba({int(lap_info["color"][1:3], 16)}, {int(lap_info["color"][3:5], 16)}, {int(lap_info["color"][5:7], 16)}, 0.1)'
+                    ),
+                    row=current_row, col=1
+                )
+            except Exception as e:
+                # Skip this lap if interpolation fails
+                continue
+
+        # Add zero reference line (fastest lap baseline)
+        fig.add_hline(
+            y=0,
+            line_dash="solid",
+            line_color=fastest_lap['color'],
+            line_width=2,
+            row=current_row, col=1
+        )
+        fig.update_yaxes(title_text="Delta (s)", row=current_row, col=1)
+        current_row += 1
 
     # Add Speed comparison
     if has_speed:
@@ -766,25 +850,57 @@ def create_comparison_chart(laps):
         fig.update_yaxes(title_text="Angle (degrees)", row=current_row, col=1)
         current_row += 1
 
-    # Add RPM comparison
+    # Add RPM and Gear comparison
     if has_rpm:
         for i, lap_info in enumerate(lap_data):
             data = lap_info['data']
+            lap = lap_info['lap']
+
+            # Add RPM on primary y-axis
             if 'RPM' in data and 'LapDist' in data:
-                lap = lap_info['lap']
                 fig.add_trace(
                     go.Scatter(
                         x=data['LapDist'],
                         y=data['RPM'],
                         mode='lines',
-                        name=f'Lap {lap.lap_number}',
+                        name=f'Lap {lap.lap_number} RPM',
                         line=dict(color=lap_info['color'], width=2),
                         hovertemplate='<b>%{fullData.name}</b><br>RPM: %{y:.0f}<extra></extra>',
                         showlegend=False
                     ),
-                    row=current_row, col=1
+                    row=current_row, col=1, secondary_y=False
                 )
-        fig.update_yaxes(title_text="RPM", row=current_row, col=1)
+
+            # Add Gear on secondary y-axis with gear=0 filtered out
+            if 'Gear' in data and 'LapDist' in data:
+                # Filter out gear=0 (neutral during shifts) - replace with previous gear
+                gears = data['Gear']
+                filtered_gears = []
+                last_valid_gear = 1  # Start with 1st gear as default
+
+                for gear in gears:
+                    if gear == 0:
+                        # Keep the previous gear during shifts
+                        filtered_gears.append(last_valid_gear)
+                    else:
+                        filtered_gears.append(gear)
+                        last_valid_gear = gear
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=data['LapDist'],
+                        y=filtered_gears,
+                        mode='lines',
+                        name=f'Lap {lap.lap_number} Gear',
+                        line=dict(color=lap_info['color'], width=2, shape='hv', dash='dot'),
+                        hovertemplate='<b>%{fullData.name}</b><br>Gear: %{y}<extra></extra>',
+                        showlegend=False
+                    ),
+                    row=current_row, col=1, secondary_y=True
+                )
+
+        fig.update_yaxes(title_text="RPM", row=current_row, col=1, secondary_y=False)
+        fig.update_yaxes(title_text="Gear", row=current_row, col=1, secondary_y=True)
         current_row += 1
 
     # Add Tire Temperature comparisons (one subplot per tire)
