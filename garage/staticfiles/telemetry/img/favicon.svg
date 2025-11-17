@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0099cc;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer circle (speedometer) -->
+  <circle cx="32" cy="32" r="28" fill="#1a1a1a" stroke="url(#grad)" stroke-width="3"/>
+
+  <!-- Speed marks -->
+  <line x1="32" y1="8" x2="32" y2="14" stroke="#00d4ff" stroke-width="2"/>
+  <line x1="48" y1="12" x2="44" y2="16" stroke="#00d4ff" stroke-width="2"/>
+  <line x1="56" y1="32" x2="50" y2="32" stroke="#00d4ff" stroke-width="2"/>
+  <line x1="48" y1="52" x2="44" y2="48" stroke="#00d4ff" stroke-width="2"/>
+  <line x1="16" y1="12" x2="20" y2="16" stroke="#00d4ff" stroke-width="2"/>
+  <line x1="8" y1="32" x2="14" y2="32" stroke="#00d4ff" stroke-width="2"/>
+  <line x1="16" y1="52" x2="20" y2="48" stroke="#00d4ff" stroke-width="2"/>
+
+  <!-- Center dot -->
+  <circle cx="32" cy="32" r="3" fill="url(#grad)"/>
+
+  <!-- Needle pointing to "high speed" -->
+  <line x1="32" y1="32" x2="45" y2="20" stroke="#ff3333" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Letter R in center -->
+  <text x="32" y="44" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#00d4ff" text-anchor="middle">R</text>
+</svg>

@@ -942,13 +942,13 @@ def lap_share_to_discord(request, pk, team_id):
 
     weather_info = ""
     if lap.session.air_temp:
-        weather_info = f"\n🌡️ Weather: {lap.session.weather_type or 'Clear'}, {lap.session.air_temp}°C"
+        weather_info = f"\n**Weather:** {lap.session.weather_type or 'Clear'}, {lap.session.air_temp}°C"
 
     # Get optional notes from POST data
     notes = request.POST.get('notes', '').strip()
     notes_section = ""
     if notes:
-        notes_section = f"\n\n📝 **Notes:**\n> {notes}\n"
+        notes_section = f"\n\n**Notes:**\n> {notes}\n"
 
     # Format lap time as mm:ss.mmm
     total_seconds = float(lap.lap_time)
@@ -959,15 +959,15 @@ def lap_share_to_discord(request, pk, team_id):
     else:
         formatted_time = f"{seconds:.3f}s"
 
-    discord_message = f"""📊 **New Lap Shared to Team**
+    discord_message = f"""**New Lap Shared to Team**
 ━━━━━━━━━━━━━━━━━━━━━
-👤 **Driver:** {driver_name}
-🏁 **Track:** {track_display}
-🏎️ **Car:** {car_display}
-⏱️ **Time:** {formatted_time} ({lap_status})
-📅 **Date:** {session_date}{weather_info}{notes_section}
+**Driver:** {driver_name}
+**Track:** {track_display}
+**Car:** {car_display}
+**Time:** {formatted_time} ({lap_status})
+**Date:** {session_date}{weather_info}{notes_section}
 
-💾 Download the .lap.gz attachment below to import
+Download the .lap.gz attachment below to import
 """
 
     try:
