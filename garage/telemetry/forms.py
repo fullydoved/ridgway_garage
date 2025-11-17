@@ -104,3 +104,51 @@ class AnalysisForm(forms.ModelForm):
         self.fields['track'].help_text = 'Optional: Filter by track (for convenience)'
         self.fields['car'].help_text = 'Optional: Filter by car (for convenience)'
         self.fields['is_public'].help_text = 'Allow public viewing of this analysis'
+
+
+class TeamForm(forms.ModelForm):
+    """
+    Form for creating/editing teams.
+    """
+
+    class Meta:
+        model = Team
+        fields = ['name', 'description', 'is_public', 'allow_join_requests', 'discord_webhook_url']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., Racing Team Name'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Team description...'
+            }),
+            'is_public': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'allow_join_requests': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'discord_webhook_url': forms.URLInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'https://discord.com/api/webhooks/...'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Optional fields
+        self.fields['description'].required = False
+        self.fields['discord_webhook_url'].required = False
+
+        # Add help text
+        self.fields['name'].help_text = 'Team name (must be unique)'
+        self.fields['description'].help_text = 'Optional team description'
+        self.fields['is_public'].help_text = 'Allow public viewing of team telemetry'
+        self.fields['allow_join_requests'].help_text = 'Allow users to request to join'
+        self.fields['discord_webhook_url'].help_text = 'Discord webhook URL for sharing laps (optional)'
+
+    def clean_discord_webhook_url(self):
+        """Validate Discord webhook URL format"""
+        url = self.cleaned_data.get('discord_webhook_url')
+        if url and not url.startswith('https://discord.com/api/webhooks/'):
+            raise forms.ValidationError('Invalid Discord webhook URL. Must start with https://discord.com/api/webhooks/')
+        return url
