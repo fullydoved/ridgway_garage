@@ -1,9 +1,17 @@
 """
-WebSocket consumers for real-time telemetry processing updates.
+WebSocket consumers for real-time telemetry processing updates and live streaming.
 """
 
 import json
+import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
+from django.contrib.auth.models import User
+
+from .services.live_telemetry import LiveTelemetrySession, get_session_metadata_from_iracing
+from .models import Session
+
+logger = logging.getLogger(__name__)
 
 
 class TelemetryProcessingConsumer(AsyncWebsocketConsumer):
@@ -114,3 +122,250 @@ class SystemUpdateConsumer(AsyncWebsocketConsumer):
             'progress': event.get('progress', 0),
             'message': event.get('message', ''),
         }))
+
+
+class LiveTelemetryConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for receiving live telemetry from iRacing client (.NET).
+
+    Handles incoming telemetry at 60Hz, processes lap detection,
+    saves to database, and broadcasts to web viewers.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.session = None
+        self.live_session = None
+        self.driver = None
+
+    async def connect(self):
+        """Handle WebSocket connection from .NET client."""
+        # For now, accept the connection
+        # Authentication should be added here (token-based auth)
+        await self.accept()
+
+        logger.info("Live telemetry client connected")
+
+        # Send acknowledgment
+        await self.send(text_data=json.dumps({
+            'type': 'connected',
+            'message': 'Ready to receive telemetry data'
+        }))
+
+    async def disconnect(self, close_code):
+        """Handle WebSocket disconnection."""
+        # Finish the session if one was created
+        if self.live_session:
+            await self._finish_session()
+
+        logger.info(f"Live telemetry client disconnected: {close_code}")
+
+    async def receive(self, text_data):
+        """
+        Receive message from .NET client.
+
+        Expected message types:
+        1. Session initialization:
+           {
+               'type': 'session_init',
+               'driver_id': 123,
+               'session_info': {...metadata...}
+           }
+
+        2. Telemetry data:
+           {
+               'type': 'telemetry',
+               'data': {...telemetry sample...}
+           }
+        """
+        try:
+            message = json.loads(text_data)
+            message_type = message.get('type')
+
+            if message_type == 'session_init':
+                await self._handle_session_init(message)
+
+            elif message_type == 'telemetry':
+                await self._handle_telemetry(message)
+
+            else:
+                logger.warning(f"Unknown message type: {message_type}")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON received: {e}")
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'Invalid JSON format'
+            }))
+
+        except Exception as e:
+            logger.error(f"Error processing message: {e}", exc_info=True)
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': str(e)
+            }))
+
+    async def _handle_session_init(self, message):
+        """Handle session initialization from client."""
+        driver_id = message.get('driver_id')
+        session_info_raw = message.get('session_info', {})
+
+        # Get driver
+        self.driver = await self._get_driver(driver_id)
+
+        if not self.driver:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': f'Driver with ID {driver_id} not found'
+            }))
+            return
+
+        # Extract session metadata
+        session_info = get_session_metadata_from_iracing(session_info_raw)
+
+        # Create live session
+        self.live_session = await self._create_live_session(
+            self.driver,
+            session_info
+        )
+
+        # Notify client
+        await self.send(text_data=json.dumps({
+            'type': 'session_created',
+            'session_id': self.live_session.session.id,
+            'message': f'Session created for {session_info["track_name"]}'
+        }))
+
+        logger.info(f"Session {self.live_session.session.id} initialized for driver {self.driver.username}")
+
+    async def _handle_telemetry(self, message):
+        """Handle incoming telemetry data."""
+        if not self.live_session:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'No active session. Send session_init first.'
+            }))
+            return
+
+        telemetry_data = message.get('data', {})
+
+        # Process telemetry
+        result = await self._process_telemetry(telemetry_data)
+
+        # Broadcast to web viewers
+        await self.channel_layer.group_send(
+            f'live_session_{self.live_session.session.id}',
+            {
+                'type': 'telemetry_update',
+                'session_id': self.live_session.session.id,
+                'telemetry': telemetry_data,
+                'events': result.get('events', [])
+            }
+        )
+
+        # Send events back to client if any (lap completed, etc.)
+        if result.get('events'):
+            await self.send(text_data=json.dumps({
+                'type': 'events',
+                'events': result['events']
+            }))
+
+    @database_sync_to_async
+    def _get_driver(self, driver_id):
+        """Get driver from database."""
+        try:
+            return User.objects.get(id=driver_id)
+        except User.DoesNotExist:
+            return None
+
+    @database_sync_to_async
+    def _create_live_session(self, driver, session_info):
+        """Create live telemetry session."""
+        return LiveTelemetrySession.create_or_get_session(
+            driver=driver,
+            session_info=session_info
+        )
+
+    @database_sync_to_async
+    def _process_telemetry(self, telemetry_data):
+        """Process telemetry data."""
+        return self.live_session.process_telemetry_update(telemetry_data)
+
+    @database_sync_to_async
+    def _finish_session(self):
+        """Finish the live session."""
+        self.live_session.finish_session()
+
+
+class LiveSessionViewerConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for web clients viewing live telemetry.
+
+    Broadcasts real-time telemetry updates to web dashboard.
+    """
+
+    async def connect(self):
+        """Handle WebSocket connection from web viewer."""
+        # Get session ID from URL route
+        self.session_id = self.scope['url_route']['kwargs']['session_id']
+        self.room_group_name = f'live_session_{self.session_id}'
+
+        # Verify session exists and is live
+        is_live = await self._is_session_live(self.session_id)
+
+        if not is_live:
+            await self.close(code=4004)
+            return
+
+        # Join room group
+        await self.channel_layer.group_add(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        await self.accept()
+
+        logger.info(f"Web viewer connected to live session {self.session_id}")
+
+    async def disconnect(self, close_code):
+        """Handle WebSocket disconnection."""
+        # Leave room group
+        await self.channel_layer.group_discard(
+            self.room_group_name,
+            self.channel_name
+        )
+
+        logger.info(f"Web viewer disconnected from session {self.session_id}")
+
+    async def receive(self, text_data):
+        """Receive message from web client (not used, but required)."""
+        pass
+
+    async def telemetry_update(self, event):
+        """
+        Receive telemetry update from channel layer and send to web client.
+
+        Event structure:
+        {
+            'type': 'telemetry_update',
+            'session_id': 123,
+            'telemetry': {...telemetry data...},
+            'events': [...]
+        }
+        """
+        # Send telemetry to web client
+        await self.send(text_data=json.dumps({
+            'type': 'telemetry',
+            'session_id': event['session_id'],
+            'data': event['telemetry'],
+            'events': event.get('events', [])
+        }))
+
+    @database_sync_to_async
+    def _is_session_live(self, session_id):
+        """Check if session is currently live."""
+        try:
+            session = Session.objects.get(id=session_id)
+            return session.is_live
+        except Session.DoesNotExist:
+            return False

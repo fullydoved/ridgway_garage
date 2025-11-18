@@ -2,6 +2,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using SVappsLAB.iRacingTelemetrySDK;
+using Microsoft.Extensions.Logging;
 
 namespace iRacingTelemetryClient;
 
@@ -37,6 +38,8 @@ public class MainForm : Form
     private ITelemetryClient<TelemetryData>? telemetryClient;
     private ClientWebSocket? webSocket;
     private CancellationTokenSource? streamingCts;
+    private ILoggerFactory loggerFactory;
+    private ILogger<TelemetryData> telemetryLogger;
 
     private bool isStreaming = false;
     private bool sessionInitialized = false;
@@ -46,6 +49,14 @@ public class MainForm : Form
 
     public MainForm()
     {
+        // Initialize logging
+        loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Warning);
+            builder.AddDebug();
+        });
+        telemetryLogger = loggerFactory.CreateLogger<TelemetryData>();
+
         // Load settings
         settings = LoadSettings();
         sendInterval = TimeSpan.FromMilliseconds(1000.0 / settings.UpdateRateHz);
@@ -123,6 +134,7 @@ public class MainForm : Form
         }
 
         trayIcon?.Dispose();
+        loggerFactory?.Dispose();
     }
 
     private void OnTrayIconDoubleClick(object? sender, EventArgs e)
@@ -156,7 +168,7 @@ public class MainForm : Form
                 return;
             }
 
-            telemetryClient = TelemetryClient<TelemetryData>.Create(null);
+            telemetryClient = TelemetryClient<TelemetryData>.Create(telemetryLogger);
             telemetryClient.OnTelemetryUpdate += OnTelemetryUpdate;
 
             streamingCts = new CancellationTokenSource();

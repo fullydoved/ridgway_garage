@@ -48,4 +48,8 @@ urlpatterns = [
     path('system/update/check/', views.system_update_check, name='system_update_check'),
     path('system/update/trigger/', views.system_update_trigger, name='system_update_trigger'),
     path('system/update/history/', views.system_update_history, name='system_update_history'),
+
+    # Live Telemetry
+    path('live/', views.live_sessions, name='live_sessions'),
+    path('live/<int:pk>/', views.live_session_detail, name='live_session_detail'),
 ]

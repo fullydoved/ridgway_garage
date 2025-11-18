@@ -161,6 +161,12 @@ class Session(models.Model):
         ('failed', 'Failed'),
     ]
 
+    CONNECTION_STATE_CHOICES = [
+        ('disconnected', 'Disconnected'),
+        ('connected', 'Connected'),
+        ('error', 'Error'),
+    ]
+
     # Relationships
     driver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
     team = models.ForeignKey(Team, on_delete=models.SET_NULL, null=True, blank=True, related_name='sessions')
@@ -187,6 +193,20 @@ class Session(models.Model):
     processing_completed_at = models.DateTimeField(null=True, blank=True)
     processing_error = models.TextField(blank=True, help_text="Error message if processing failed")
 
+    # Live streaming status
+    is_live = models.BooleanField(default=False, help_text="Currently streaming live telemetry")
+    connection_state = models.CharField(
+        max_length=20,
+        choices=CONNECTION_STATE_CHOICES,
+        default='disconnected',
+        help_text="Live connection state"
+    )
+    last_telemetry_update = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp of last received telemetry data"
+    )
+
     # Environmental conditions (extracted from IBT)
     air_temp = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Air temperature in Celsius")
     track_temp = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Track temperature in Celsius")
@@ -205,6 +225,7 @@ class Session(models.Model):
             models.Index(fields=['driver', 'track', 'car']),
             models.Index(fields=['processing_status']),
             models.Index(fields=['-session_date']),
+            models.Index(fields=['is_live', '-last_telemetry_update']),
         ]
 
     def __str__(self):

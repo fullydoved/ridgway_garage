@@ -1268,3 +1268,55 @@ def system_update_history(request):
     }
 
     return render(request, 'telemetry/system_update_history.html', context)
+
+
+def live_sessions(request):
+    """
+    Display list of currently active live telemetry sessions.
+    """
+    # Get all active live sessions, ordered by last update
+    active_sessions = Session.objects.filter(
+        is_live=True,
+        connection_state='connected'
+    ).select_related('driver', 'team', 'track', 'car').order_by('-last_telemetry_update')
+
+    # Also show recently disconnected sessions (last 5 minutes)
+    from django.utils import timezone
+    from datetime import timedelta
+    recent_cutoff = timezone.now() - timedelta(minutes=5)
+
+    recent_sessions = Session.objects.filter(
+        is_live=False,
+        connection_state='disconnected',
+        last_telemetry_update__gte=recent_cutoff
+    ).select_related('driver', 'team', 'track', 'car').order_by('-last_telemetry_update')
+
+    context = {
+        'active_sessions': active_sessions,
+        'recent_sessions': recent_sessions,
+    }
+
+    return render(request, 'telemetry/live_sessions.html', context)
+
+
+def live_session_detail(request, pk):
+    """
+    Display real-time telemetry for a specific live session.
+    Shows current lap data with WebSocket updates.
+    """
+    session = get_object_or_404(Session, pk=pk)
+
+    # Get laps for this session
+    laps = session.laps.all().order_by('lap_number')
+
+    # Get latest lap with telemetry data
+    latest_lap = laps.filter(telemetry__isnull=False).last()
+
+    context = {
+        'session': session,
+        'laps': laps,
+        'latest_lap': latest_lap,
+        'is_live': session.is_live,
+    }
+
+    return render(request, 'telemetry/live_session_detail.html', context)
