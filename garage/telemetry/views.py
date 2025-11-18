@@ -1338,6 +1338,89 @@ def api_token_view(request):
     return render(request, 'telemetry/api_token.html', context)
 
 
+@login_required
+def user_settings(request):
+    """
+    User profile and settings page.
+    Handles profile settings, username/password changes, and API token management.
+    """
+    from .models import Driver
+    from .forms import UserSettingsForm, UsernameChangeForm, CustomPasswordChangeForm
+
+    # Get or create driver profile
+    driver_profile, created = Driver.objects.get_or_create(
+        user=request.user,
+        defaults={'display_name': request.user.username}
+    )
+
+    # Determine which form was submitted based on the submit button name
+    if request.method == 'POST':
+        # Handle API token generation
+        if 'generate_token' in request.POST:
+            driver_profile.generate_api_token()
+            messages.success(request, 'New API token generated successfully!')
+            return redirect('telemetry:user_settings')
+
+        # Handle profile settings form
+        elif 'save_settings' in request.POST:
+            settings_form = UserSettingsForm(request.POST, instance=driver_profile, user=request.user)
+            if settings_form.is_valid():
+                settings_form.save()
+                messages.success(request, 'Settings saved successfully!')
+                return redirect('telemetry:user_settings')
+            else:
+                # Re-instantiate other forms for display
+                username_form = UsernameChangeForm(instance=request.user)
+                password_form = CustomPasswordChangeForm(user=request.user)
+
+        # Handle username change form
+        elif 'change_username' in request.POST:
+            username_form = UsernameChangeForm(request.POST, instance=request.user)
+            if username_form.is_valid():
+                username_form.save()
+                messages.success(request, 'Username changed successfully!')
+                return redirect('telemetry:user_settings')
+            else:
+                # Re-instantiate other forms for display
+                settings_form = UserSettingsForm(instance=driver_profile, user=request.user)
+                password_form = CustomPasswordChangeForm(user=request.user)
+
+        # Handle password change form
+        elif 'change_password' in request.POST:
+            password_form = CustomPasswordChangeForm(user=request.user, data=request.POST)
+            if password_form.is_valid():
+                password_form.save()
+                # Update session to prevent logout
+                from django.contrib.auth import update_session_auth_hash
+                update_session_auth_hash(request, password_form.user)
+                messages.success(request, 'Password changed successfully!')
+                return redirect('telemetry:user_settings')
+            else:
+                # Re-instantiate other forms for display
+                settings_form = UserSettingsForm(instance=driver_profile, user=request.user)
+                username_form = UsernameChangeForm(instance=request.user)
+        else:
+            # Unknown form submission, re-instantiate all forms
+            settings_form = UserSettingsForm(instance=driver_profile, user=request.user)
+            username_form = UsernameChangeForm(instance=request.user)
+            password_form = CustomPasswordChangeForm(user=request.user)
+    else:
+        # GET request - instantiate all forms
+        settings_form = UserSettingsForm(instance=driver_profile, user=request.user)
+        username_form = UsernameChangeForm(instance=request.user)
+        password_form = CustomPasswordChangeForm(user=request.user)
+
+    context = {
+        'driver_profile': driver_profile,
+        'settings_form': settings_form,
+        'username_form': username_form,
+        'password_form': password_form,
+        'has_token': bool(driver_profile.api_token),
+    }
+
+    return render(request, 'telemetry/user_settings.html', context)
+
+
 def live_session_detail(request, pk):
     """
     Display real-time telemetry for a specific live session.

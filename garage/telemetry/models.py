@@ -33,6 +33,12 @@ class Driver(models.Model):
     default_team = models.ForeignKey('Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='default_members')
     timezone = models.CharField(max_length=50, default='UTC')
 
+    # Notification preferences
+    enable_pb_notifications = models.BooleanField(
+        default=True,
+        help_text="Enable Discord notifications when you set a personal best"
+    )
+
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

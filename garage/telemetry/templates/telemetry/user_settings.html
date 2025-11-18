@@ -1,0 +1,234 @@
+{% extends 'telemetry/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}User Settings - Ridgway Garage{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 offset-md-1">
+        <h1><i class="bi bi-gear"></i> User Settings</h1>
+        <p class="lead">Manage your profile, security, and notification preferences.</p>
+
+        <!-- Tabs Navigation -->
+        <ul class="nav nav-tabs mt-4" id="settingsTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="profile-tab" data-bs-toggle="tab" data-bs-target="#profile" type="button" role="tab" aria-controls="profile" aria-selected="true">
+                    <i class="bi bi-person"></i> Profile
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="api-tab" data-bs-toggle="tab" data-bs-target="#api" type="button" role="tab" aria-controls="api" aria-selected="false">
+                    <i class="bi bi-key"></i> API Token
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="security-tab" data-bs-toggle="tab" data-bs-target="#security" type="button" role="tab" aria-controls="security" aria-selected="false">
+                    <i class="bi bi-shield-lock"></i> Security
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tabs Content -->
+        <div class="tab-content" id="settingsTabsContent">
+            <!-- Profile Tab -->
+            <div class="tab-pane fade show active" id="profile" role="tabpanel" aria-labelledby="profile-tab">
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-person-badge"></i> Profile Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            {% csrf_token %}
+                            {{ settings_form|crispy }}
+                            <button type="submit" name="save_settings" class="btn btn-primary mt-3">
+                                <i class="bi bi-save"></i> Save Settings
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Token Tab -->
+            <div class="tab-pane fade" id="api" role="tabpanel" aria-labelledby="api-tab">
+                {% if has_token %}
+                <div class="card mt-3">
+                    <div class="card-header bg-success text-white">
+                        <i class="bi bi-check-circle"></i> Your API Token
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Keep this token secret!</strong> Anyone with this token can stream telemetry as you.
+                        </div>
+
+                        <div class="form-group">
+                            <label for="apiToken" class="form-label">API Token:</label>
+                            <div class="input-group">
+                                <input type="password" class="form-control font-monospace" id="apiToken" value="{{ driver_profile.api_token }}" readonly>
+                                <button class="btn btn-outline-secondary" type="button" onclick="toggleTokenVisibility()">
+                                    <i class="bi bi-eye" id="toggleIcon"></i>
+                                </button>
+                                <button class="btn btn-outline-primary" type="button" onclick="copyToken()">
+                                    <i class="bi bi-clipboard"></i> Copy
+                                </button>
+                            </div>
+                            <small class="form-text text-muted">Copy this token and paste it into the telemetry client settings.</small>
+                        </div>
+
+                        <hr>
+
+                        <h5><i class="bi bi-exclamation-circle text-danger"></i> Regenerate Token</h5>
+                        <p>Generating a new token will invalidate the old one. You'll need to update the token in your telemetry client.</p>
+
+                        <form method="post" onsubmit="return confirm('Are you sure? This will invalidate your current token.');">
+                            {% csrf_token %}
+                            <button type="submit" name="generate_token" class="btn btn-danger">
+                                <i class="bi bi-arrow-repeat"></i> Regenerate Token
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% else %}
+                <div class="card mt-3">
+                    <div class="card-header bg-info text-white">
+                        <i class="bi bi-info-circle"></i> No Token Generated
+                    </div>
+                    <div class="card-body">
+                        <p>You don't have an API token yet. Generate one to use the telemetry client.</p>
+
+                        <form method="post">
+                            {% csrf_token %}
+                            <button type="submit" name="generate_token" class="btn btn-primary">
+                                <i class="bi bi-plus-circle"></i> Generate Token
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Instructions -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <i class="bi bi-question-circle"></i> How to Use
+                    </div>
+                    <div class="card-body">
+                        <h5>Step 1: Download the Client</h5>
+                        <p>Download the iRacing Telemetry Client for Windows from our <a href="https://github.com/fullydoved/ridgway_garage/releases">GitHub Releases</a> page.</p>
+
+                        <h5>Step 2: Configure the Client</h5>
+                        <ol>
+                            <li>Run the client and right-click the system tray icon</li>
+                            <li>Click "Settings"</li>
+                            <li>Paste your API token into the "API Token" field</li>
+                            <li>Set the server URL to: <code>ws://{{ request.get_host }}/ws/telemetry/live/</code></li>
+                            <li>Click "OK" to save</li>
+                        </ol>
+
+                        <h5>Step 3: Start Streaming</h5>
+                        <ol>
+                            <li>Launch iRacing</li>
+                            <li>Right-click the client system tray icon</li>
+                            <li>Click "Start Streaming"</li>
+                            <li>Join a session in iRacing</li>
+                            <li>Your session will appear in the <a href="{% url 'telemetry:live_sessions' %}">Live Sessions</a> page</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Security Tab -->
+            <div class="tab-pane fade" id="security" role="tabpanel" aria-labelledby="security-tab">
+                <!-- Username Change -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-person-circle"></i> Change Username</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Current username: <strong>{{ request.user.username }}</strong></p>
+                        <form method="post">
+                            {% csrf_token %}
+                            {{ username_form|crispy }}
+                            <button type="submit" name="change_username" class="btn btn-primary mt-3">
+                                <i class="bi bi-pencil"></i> Change Username
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Password Change -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-lock"></i> Change Password</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post">
+                            {% csrf_token %}
+                            {{ password_form|crispy }}
+                            <button type="submit" name="change_password" class="btn btn-primary mt-3">
+                                <i class="bi bi-shield-check"></i> Change Password
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleTokenVisibility() {
+    const tokenInput = document.getElementById('apiToken');
+    const toggleIcon = document.getElementById('toggleIcon');
+
+    if (tokenInput.type === 'password') {
+        tokenInput.type = 'text';
+        toggleIcon.className = 'bi bi-eye-slash';
+    } else {
+        tokenInput.type = 'password';
+        toggleIcon.className = 'bi bi-eye';
+    }
+}
+
+function copyToken() {
+    const tokenInput = document.getElementById('apiToken');
+    tokenInput.select();
+    tokenInput.setSelectionRange(0, 99999); // For mobile
+
+    navigator.clipboard.writeText(tokenInput.value).then(function() {
+        // Show success message
+        const btn = event.target.closest('button');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i> Copied!';
+        btn.classList.remove('btn-outline-primary');
+        btn.classList.add('btn-success');
+
+        setTimeout(function() {
+            btn.innerHTML = originalHTML;
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-outline-primary');
+        }, 2000);
+    });
+}
+
+// If there are form errors, switch to the appropriate tab
+document.addEventListener('DOMContentLoaded', function() {
+    // Check for form errors in each section
+    const settingsForm = document.querySelector('#profile form');
+    const usernameForm = document.querySelector('#security form[name*="username"]');
+    const passwordForm = document.querySelector('#security form[name*="password"]');
+
+    // Switch to profile tab if settings form has errors
+    if (settingsForm && settingsForm.querySelector('.is-invalid, .errorlist')) {
+        const profileTab = new bootstrap.Tab(document.getElementById('profile-tab'));
+        profileTab.show();
+    }
+
+    // Switch to security tab if username or password form has errors
+    if ((usernameForm && usernameForm.querySelector('.is-invalid, .errorlist')) ||
+        (passwordForm && passwordForm.querySelector('.is-invalid, .errorlist'))) {
+        const securityTab = new bootstrap.Tab(document.getElementById('security-tab'));
+        securityTab.show();
+    }
+});
+</script>
+{% endblock %}

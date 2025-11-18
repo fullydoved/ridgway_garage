@@ -291,12 +291,29 @@ def parse_ibt_file(self, session_id):
                 'Analyzing lap times'
             )
 
-            # Mark the fastest lap as personal best (exclude lap 0 and laps with 0 time)
-            fastest_lap = session.laps.exclude(lap_number=0).filter(lap_time__gt=0).order_by('lap_time').first()
-            if fastest_lap:
-                fastest_lap.is_personal_best = True
-                fastest_lap.save()
-                logger.info(f"Fastest lap: #{fastest_lap.lap_number} ({fastest_lap.lap_time}s)")
+            # Check for personal best using proper global PB tracking
+            from telemetry.utils.pb_tracker import update_personal_bests
+            from telemetry.services.discord_notifications import send_pb_notification
+
+            is_new_pb, previous_time, improvement = update_personal_bests(session)
+
+            if is_new_pb:
+                # Get the PB lap for logging and notification
+                pb_lap = session.laps.filter(is_personal_best=True).first()
+                if pb_lap:
+                    logger.info(
+                        f"New PB detected: #{pb_lap.lap_number} ({pb_lap.lap_time}s)"
+                        + (f" - improved by {improvement}s" if improvement else " - first PB")
+                    )
+
+                    # Send Discord notification to team channel
+                    send_pb_notification(
+                        session=session,
+                        lap=pb_lap,
+                        is_improvement=(previous_time is not None),
+                        previous_time=previous_time,
+                        improvement=improvement
+                    )
 
         elif telemetry_data:
             # Fallback: Create single lap if Lap channel not available

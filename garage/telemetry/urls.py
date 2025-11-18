@@ -52,6 +52,9 @@ urlpatterns = [
     # Live Telemetry
     path('live/', views.live_sessions, name='live_sessions'),
     path('live/<int:pk>/', views.live_session_detail, name='live_session_detail'),
+
+    # User Settings
+    path('settings/', views.user_settings, name='user_settings'),
     path('api-token/', views.api_token_view, name='api_token'),
 
     # API

@@ -5,7 +5,10 @@ Forms for the Ridgway Garage telemetry app.
 from django import forms
 from django.core.validators import FileExtensionValidator
 
-from .models import Session, Track, Car, Team, Analysis, Lap
+from django.contrib.auth.models import User
+from django.contrib.auth.forms import PasswordChangeForm
+
+from .models import Session, Track, Car, Team, Analysis, Lap, Driver
 
 
 class SessionUploadForm(forms.ModelForm):
@@ -152,3 +155,111 @@ class TeamForm(forms.ModelForm):
         if url and not url.startswith('https://discord.com/api/webhooks/'):
             raise forms.ValidationError('Invalid Discord webhook URL. Must start with https://discord.com/api/webhooks/')
         return url
+
+
+class UserSettingsForm(forms.ModelForm):
+    """
+    Form for user profile settings and preferences.
+    """
+
+    class Meta:
+        model = Driver
+        fields = ['display_name', 'iracing_id', 'default_team', 'timezone', 'enable_pb_notifications']
+        widgets = {
+            'display_name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Your display name'
+            }),
+            'iracing_id': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'e.g., 123456'
+            }),
+            'default_team': forms.Select(attrs={'class': 'form-select'}),
+            'timezone': forms.Select(attrs={'class': 'form-select'}),
+            'enable_pb_notifications': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+
+        # Optional fields
+        self.fields['iracing_id'].required = False
+        self.fields['default_team'].required = False
+
+        # Filter teams to only those the user is a member of
+        if self.user:
+            self.fields['default_team'].queryset = Team.objects.filter(members=self.user)
+
+        # Add timezone choices (common timezones)
+        from django.utils import timezone as tz
+        import pytz
+        common_timezones = [
+            'UTC',
+            'America/New_York',
+            'America/Chicago',
+            'America/Denver',
+            'America/Los_Angeles',
+            'America/Toronto',
+            'Europe/London',
+            'Europe/Paris',
+            'Europe/Berlin',
+            'Australia/Sydney',
+            'Asia/Tokyo',
+        ]
+        timezone_choices = [(tz, tz) for tz in common_timezones]
+        self.fields['timezone'].widget = forms.Select(
+            attrs={'class': 'form-select'},
+            choices=timezone_choices
+        )
+
+        # Add help text
+        self.fields['display_name'].help_text = 'Name shown on leaderboards and in telemetry'
+        self.fields['iracing_id'].help_text = 'Your iRacing Member ID (optional)'
+        self.fields['default_team'].help_text = 'Default team for session uploads and PB notifications'
+        self.fields['timezone'].help_text = 'Your timezone for displaying dates and times'
+        self.fields['enable_pb_notifications'].help_text = 'Send Discord notifications to your default team when you set a personal best'
+
+
+class UsernameChangeForm(forms.ModelForm):
+    """
+    Form for changing username.
+    """
+
+    class Meta:
+        model = User
+        fields = ['username']
+        widgets = {
+            'username': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'New username'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['username'].help_text = 'Enter a new username (letters, digits, and @/./+/-/_ only)'
+
+    def clean_username(self):
+        """Validate that username is unique"""
+        username = self.cleaned_data.get('username')
+        if User.objects.filter(username=username).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError('This username is already taken.')
+        return username
+
+
+class CustomPasswordChangeForm(PasswordChangeForm):
+    """
+    Custom password change form with Bootstrap styling.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Add Bootstrap classes to all fields
+        for field_name in self.fields:
+            self.fields[field_name].widget.attrs['class'] = 'form-control'
+
+        # Update help text
+        self.fields['old_password'].help_text = 'Enter your current password'
+        self.fields['new_password1'].help_text = 'Enter your new password'
+        self.fields['new_password2'].help_text = 'Enter the same password again for verification'
