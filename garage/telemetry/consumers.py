@@ -363,12 +363,16 @@ class LiveTelemetryConsumer(AsyncWebsocketConsumer):
             client_data,
             timeout=300
         )
+        # Also add to a set for easy retrieval
+        await database_sync_to_async(self._add_to_client_set)(self.client_id)
 
     async def _remove_connected_client(self):
         """Remove connected client from Redis cache."""
         await database_sync_to_async(cache.delete)(
             f'live_client_{self.client_id}'
         )
+        # Also remove from set
+        await database_sync_to_async(self._remove_from_client_set)(self.client_id)
 
     async def _update_client_status(self, status):
         """Update client status in cache."""
@@ -382,6 +386,19 @@ class LiveTelemetryConsumer(AsyncWebsocketConsumer):
                 client_data,
                 timeout=300
             )
+
+    def _add_to_client_set(self, client_id):
+        """Add client ID to the set of connected clients."""
+        # Get current set
+        client_set = cache.get('live_clients_set', set())
+        client_set.add(client_id)
+        cache.set('live_clients_set', client_set, timeout=None)
+
+    def _remove_from_client_set(self, client_id):
+        """Remove client ID from the set of connected clients."""
+        client_set = cache.get('live_clients_set', set())
+        client_set.discard(client_id)
+        cache.set('live_clients_set', client_set, timeout=None)
 
 
 class LiveSessionViewerConsumer(AsyncWebsocketConsumer):

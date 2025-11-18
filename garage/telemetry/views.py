@@ -1296,11 +1296,9 @@ def live_sessions(request):
     # Get connected clients waiting for data (from cache)
     # Only show clients that are waiting (not streaming, as those show in active_sessions)
     connected_clients = []
-    # Scan cache for live_client_* keys
-    # Note: This is a simplified approach. For production, consider maintaining a set in Redis.
-    cache_keys = cache.keys('live_client_*') if hasattr(cache, 'keys') else []
-    for key in cache_keys:
-        client_data = cache.get(key)
+    client_set = cache.get('live_clients_set', set())
+    for client_id in client_set:
+        client_data = cache.get(f'live_client_{client_id}')
         if client_data and client_data.get('status') == 'waiting_for_data':
             connected_clients.append(client_data)
 
