@@ -53,4 +53,8 @@ urlpatterns = [
     path('live/', views.live_sessions, name='live_sessions'),
     path('live/<int:pk>/', views.live_session_detail, name='live_session_detail'),
     path('api-token/', views.api_token_view, name='api_token'),
+
+    # API
+    path('api/auth/test/', views.api_auth_test, name='api_auth_test'),
+    path('api/upload/', views.api_upload, name='api_upload'),
 ]

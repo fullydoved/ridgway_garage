@@ -39,20 +39,20 @@ jobs:
     - name: Create release ZIP
       run: |
         $version = "${{ github.ref_name }}"
-        Compress-Archive -Path ./publish/* -DestinationPath "iRacingTelemetryClient-$version.zip"
+        Compress-Archive -Path ./publish/* -DestinationPath "RidgwayGarageAgent-$version.zip"
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: iRacingTelemetryClient-*.zip
+        files: RidgwayGarageAgent-*.zip
         body: |
-          ## iRacing Telemetry Client ${{ github.ref_name }}
+          ## Ridgway Garage Agent ${{ github.ref_name }}
 
           ### Installation
-          1. Download `iRacingTelemetryClient-${{ github.ref_name }}.zip`
-          2. Extract to a folder (e.g., `C:\iRacingTelemetryClient`)
-          3. Edit `appsettings.json` with your server URL and driver ID
-          4. Run `iRacingTelemetryClient.exe`
+          1. Download `RidgwayGarageAgent-${{ github.ref_name }}.zip`
+          2. Extract to a folder (e.g., `C:\iRacingClient`)
+          3. Edit `appsettings.json` with your server URL and API token
+          4. Run `RidgwayGarageAgent.exe`
 
           ### Requirements
           - Windows 10/11 (64-bit)

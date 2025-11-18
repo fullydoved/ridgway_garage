@@ -1,32 +1,73 @@
-using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
-using SVappsLAB.iRacingTelemetrySDK;
-using Microsoft.Extensions.Logging;
 
 namespace iRacingTelemetryClient;
 
-/// <summary>
-/// Required telemetry variables from iRacing SDK
-/// </summary>
-[RequiredTelemetryVars([
-    "SessionTime", "LapDist", "LapDistPct", "Lap", "LapCurrentLapTime", "LapLastLapTime",
-    "Speed", "RPM", "Gear",
-    "Throttle", "Brake", "SteeringWheelAngle", "Clutch",
-    "Lat", "Lon",
-    "LFtempCL", "RFtempCL", "LRtempCL", "RRtempCL",
-    "LFpressure", "RFpressure", "LRpressure", "RRpressure",
-    "FuelLevel", "FuelUsePerHour",
-    "PlayerTrackSurface", "OnPitRoad",
-    "IsOnTrack", "IsOnTrackCar"
-])]
 internal static class Program
 {
     [STAThread]
     static void Main()
     {
-        ApplicationConfiguration.Initialize();
-        Application.Run(new MainForm());
+        try
+        {
+            // Write startup to crash log
+            WriteCrashLog("Application starting...");
+
+            // Add global exception handlers
+            Application.ThreadException += Application_ThreadException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+
+            WriteCrashLog("Initializing application configuration...");
+            ApplicationConfiguration.Initialize();
+
+            WriteCrashLog("Creating main form...");
+            Application.Run(new MainForm());
+
+            WriteCrashLog("Application exited normally");
+        }
+        catch (Exception ex)
+        {
+            WriteCrashLog($"FATAL ERROR during startup: {ex.Message}\n{ex.StackTrace}");
+            MessageBox.Show(
+                $"Fatal error during startup:\n\n{ex.Message}\n\nCheck crash.log for details.",
+                "Startup Failed",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private static void WriteCrashLog(string message)
+    {
+        try
+        {
+            string logPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
+            string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            File.AppendAllText(logPath, $"[{timestamp}] {message}\n");
+        }
+        catch
+        {
+            // If we can't even write to crash log, we're in trouble
+        }
+    }
+
+    private static void Application_ThreadException(object sender, System.Threading.ThreadExceptionEventArgs e)
+    {
+        WriteCrashLog($"Unhandled thread exception: {e.Exception.Message}\n{e.Exception.StackTrace}");
+        LogManager.Log($"Unhandled thread exception: {e.Exception.Message}\n{e.Exception.StackTrace}", "CRITICAL");
+        MessageBox.Show(
+            $"A critical error occurred:\n\n{e.Exception.Message}\n\nCheck crash.log for details.",
+            "Critical Error",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Error);
+    }
+
+    private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        if (e.ExceptionObject is Exception ex)
+        {
+            WriteCrashLog($"Unhandled exception: {ex.Message}\n{ex.StackTrace}");
+            LogManager.Log($"Unhandled exception: {ex.Message}\n{ex.StackTrace}", "CRITICAL");
+        }
     }
 }
 
@@ -34,97 +75,128 @@ public class MainForm : Form
 {
     private NotifyIcon? trayIcon;
     private ContextMenuStrip? trayMenu;
+    private ToolStripMenuItem? menuStartMonitoring;
+    private ToolStripMenuItem? menuStopMonitoring;
     private AppSettings settings;
-    private ITelemetryClient<TelemetryData>? telemetryClient;
-    private ClientWebSocket? webSocket;
-    private CancellationTokenSource? streamingCts;
-    private ILoggerFactory loggerFactory;
-    private ILogger<TelemetryData> telemetryLogger;
+    private FileSystemWatcher? fileWatcher;
+    private UploadTracker uploadTracker;
+    private HttpClient httpClient;
+    private SemaphoreSlim uploadSemaphore = new SemaphoreSlim(1, 1); // Only allow one upload at a time
 
-    private bool isStreaming = false;
-    private bool sessionInitialized = false;
-    private int currentLap = 0;
-    private DateTime lastSendTime = DateTime.MinValue;
-    private TimeSpan sendInterval;
+    private bool isMonitoring = false;
+    private string telemetryFolder = "";
 
     public MainForm()
     {
-        // Initialize logging
-        loggerFactory = LoggerFactory.Create(builder =>
+        try
         {
-            builder.SetMinimumLevel(LogLevel.Warning);
-            builder.AddDebug();
-        });
-        telemetryLogger = loggerFactory.CreateLogger<TelemetryData>();
+            // Create hidden form
+            this.WindowState = FormWindowState.Minimized;
+            this.ShowInTaskbar = false;
+            this.Visible = false;
 
-        // Load settings
-        settings = LoadSettings();
-        sendInterval = TimeSpan.FromMilliseconds(1000.0 / settings.UpdateRateHz);
+            // Load settings
+            settings = LoadSettings();
+            uploadTracker = new UploadTracker();
+            httpClient = new HttpClient();
+            httpClient.Timeout = TimeSpan.FromMinutes(5);
 
-        // Initialize form (hidden)
-        this.Text = "iRacing Telemetry Client";
-        this.WindowState = FormWindowState.Minimized;
-        this.ShowInTaskbar = false;
-        this.FormBorderStyle = FormBorderStyle.FixedSingle;
-        this.MaximizeBox = false;
-        this.Size = new Size(400, 300);
+            // Determine telemetry folder
+            telemetryFolder = GetTelemetryFolder();
 
-        // Create system tray icon
+        // Create tray icon
         trayMenu = new ContextMenuStrip();
-        trayMenu.Items.Add("Start Streaming", null, OnStartStreaming);
-        trayMenu.Items.Add("Stop Streaming", null, OnStopStreaming);
+        menuStartMonitoring = new ToolStripMenuItem("Start Monitoring", null, OnStartMonitoring);
+        menuStopMonitoring = new ToolStripMenuItem("Stop Monitoring", null, OnStopMonitoring) { Enabled = false };
+        trayMenu.Items.Add(menuStartMonitoring);
+        trayMenu.Items.Add(menuStopMonitoring);
         trayMenu.Items.Add("-");
-        trayMenu.Items.Add("Settings...", null, OnSettings);
         trayMenu.Items.Add("View Log", null, OnViewLog);
+        trayMenu.Items.Add("Settings", null, OnSettings);
         trayMenu.Items.Add("-");
         trayMenu.Items.Add("Exit", null, OnExit);
 
-        // Disable Stop initially
-        trayMenu.Items[1].Enabled = false;
-
         // Load custom icon
-        Icon appIcon;
+        Icon? appIcon = null;
         try
         {
-            appIcon = new Icon("app.ico");
+            string iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
+            if (File.Exists(iconPath))
+            {
+                appIcon = new Icon(iconPath);
+            }
         }
-        catch
+        catch (Exception ex)
         {
-            appIcon = SystemIcons.Application;
+            LogManager.Log($"Could not load app icon: {ex.Message}", "WARN");
         }
 
-        trayIcon = new NotifyIcon()
+        trayIcon = new NotifyIcon
         {
-            Icon = appIcon,
+            Icon = appIcon ?? SystemIcons.Application,
             ContextMenuStrip = trayMenu,
             Visible = true,
-            Text = "iRacing Telemetry - Stopped"
+            Text = "Ridgway Garage Agent - Stopped"
         };
 
         trayIcon.DoubleClick += OnTrayIconDoubleClick;
 
-        // Show balloon tip on startup
-        trayIcon.ShowBalloonTip(3000, "iRacing Telemetry",
-            "Client is ready. Right-click icon to start streaming.",
-            ToolTipIcon.Info);
-
         // Handle form closing
         this.FormClosing += MainForm_FormClosing;
+
+        // Handle form load - this is when we can safely start auto-monitoring
+        this.Load += MainForm_Load;
+
+        LogManager.Log("Application started");
+        LogManager.Log($"Monitoring folder: {telemetryFolder}");
+        }
+        catch (Exception ex)
+        {
+            // Fatal error during initialization - write to crash log and show error
+            File.AppendAllText(
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log"),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] FATAL ERROR in MainForm constructor: {ex.Message}\n{ex.StackTrace}\n"
+            );
+
+            MessageBox.Show(
+                $"Fatal error during initialization:\n\n{ex.Message}\n\nCheck crash.log in application folder.",
+                "Initialization Failed",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+
+            // Exit the application
+            Environment.Exit(1);
+        }
+    }
+
+    private string GetTelemetryFolder()
+    {
+        // Try to find iRacing telemetry folder
+        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string iracingPath = Path.Combine(documentsPath, "iRacing", "telemetry");
+
+        if (Directory.Exists(iracingPath))
+        {
+            return iracingPath;
+        }
+
+        // Fallback to user-specified or default
+        return settings.TelemetryFolder ?? iracingPath;
     }
 
     private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
     {
-        if (isStreaming)
+        if (isMonitoring)
         {
             var result = MessageBox.Show(
-                "Streaming is active. Stop streaming and exit?",
+                "Monitoring is active. Stop monitoring and exit?",
                 "Confirm Exit",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
 
             if (result == DialogResult.Yes)
             {
-                StopStreamingAsync().Wait();
+                StopMonitoring();
             }
             else
             {
@@ -134,7 +206,48 @@ public class MainForm : Form
         }
 
         trayIcon?.Dispose();
-        loggerFactory?.Dispose();
+        httpClient?.Dispose();
+    }
+
+    private void MainForm_Load(object? sender, EventArgs e)
+    {
+        // Auto-start monitoring if auto-upload is enabled and settings are valid
+        if (settings.AutoUpload)
+        {
+            LogManager.Log("Auto-upload enabled");
+
+            // Check if we have the required settings before auto-starting
+            if (Directory.Exists(telemetryFolder) && !string.IsNullOrEmpty(settings.ApiToken))
+            {
+                LogManager.Log("Starting monitoring automatically");
+                // Start monitoring on next message loop iteration
+                BeginInvoke(() =>
+                {
+                    try
+                    {
+                        OnStartMonitoring(null, EventArgs.Empty);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogManager.Log($"Error during auto-start: {ex.Message}", "ERROR");
+                    }
+                });
+            }
+            else
+            {
+                LogManager.Log("Cannot auto-start: Missing API token or invalid telemetry folder", "WARN");
+                trayIcon!.ShowBalloonTip(3000, "Configuration Required",
+                    "Please configure your API token and telemetry folder in Settings.",
+                    ToolTipIcon.Warning);
+            }
+        }
+        else
+        {
+            // Show balloon tip on startup
+            trayIcon!.ShowBalloonTip(3000, "Ridgway Garage Agent",
+                "Agent is ready. Right-click icon to start monitoring.",
+                ToolTipIcon.Info);
+        }
     }
 
     private void OnTrayIconDoubleClick(object? sender, EventArgs e)
@@ -144,118 +257,303 @@ public class MainForm : Form
 
     private void ShowStatusWindow()
     {
-        var status = new StatusForm(isStreaming, settings, currentLap);
+        var status = new StatusForm(isMonitoring, settings, telemetryFolder, uploadTracker.GetUploadedCount());
         status.ShowDialog();
     }
 
-    private async void OnStartStreaming(object? sender, EventArgs e)
+    private async void OnStartMonitoring(object? sender, EventArgs e)
     {
-        if (isStreaming) return;
+        if (isMonitoring) return;
 
         try
         {
-            trayIcon!.Text = "iRacing Telemetry - Connecting...";
-            trayIcon.ShowBalloonTip(2000, "Starting", "Connecting to server...", ToolTipIcon.Info);
+            LogManager.Log("Starting file monitoring...");
 
-            webSocket = new ClientWebSocket();
-
-            if (!await ConnectToServerAsync())
+            // Verify telemetry folder exists
+            if (!Directory.Exists(telemetryFolder))
             {
-                trayIcon.ShowBalloonTip(5000, "Connection Failed",
-                    $"Could not connect to {settings.ServerUrl}",
-                    ToolTipIcon.Error);
-                trayIcon.Text = "iRacing Telemetry - Connection Failed";
+                LogManager.Log($"Telemetry folder not found: {telemetryFolder}", "ERROR");
+                MessageBox.Show(
+                    $"Telemetry folder not found:\n{telemetryFolder}\n\nPlease check Settings.",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
                 return;
             }
 
-            telemetryClient = TelemetryClient<TelemetryData>.Create(telemetryLogger);
-            telemetryClient.OnTelemetryUpdate += OnTelemetryUpdate;
-
-            streamingCts = new CancellationTokenSource();
-            isStreaming = true;
-
-            // Update menu
-            trayMenu!.Items[0].Enabled = false; // Start
-            trayMenu.Items[1].Enabled = true;   // Stop
-
-            trayIcon.Text = "iRacing Telemetry - Connected";
-            trayIcon.ShowBalloonTip(2000, "Connected", "Waiting for iRacing...", ToolTipIcon.Info);
-
-            // Start monitoring in background
-            _ = Task.Run(async () =>
+            // Verify API token
+            if (string.IsNullOrEmpty(settings.ApiToken))
             {
-                try
-                {
-                    await telemetryClient.Monitor(streamingCts.Token);
-                }
-                catch (TaskCanceledException)
-                {
-                    // Normal shutdown
-                }
-                catch (Exception ex)
-                {
-                    BeginInvoke(() =>
-                    {
-                        trayIcon.ShowBalloonTip(5000, "Error", $"Streaming error: {ex.Message}", ToolTipIcon.Error);
-                    });
-                }
-            });
+                LogManager.Log("API token not configured", "ERROR");
+                MessageBox.Show(
+                    "API token not configured. Please set your API token in Settings.",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                return;
+            }
+
+            // Check if auto-upload is enabled
+            if (!settings.AutoUpload)
+            {
+                LogManager.Log("Auto-upload is disabled in settings", "WARN");
+                MessageBox.Show(
+                    "Auto-upload is currently disabled in Settings.\n\nFiles will be detected but not uploaded.",
+                    "Auto-Upload Disabled",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+
+            // Start file watcher
+            fileWatcher = new FileSystemWatcher(telemetryFolder)
+            {
+                Filter = "*.ibt",
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.CreationTime,
+                EnableRaisingEvents = true
+            };
+
+            fileWatcher.Created += OnFileCreated;
+            fileWatcher.Changed += OnFileChanged;
+
+            isMonitoring = true;
+            menuStartMonitoring!.Enabled = false;
+            menuStopMonitoring!.Enabled = true;
+            trayIcon!.Text = "Ridgway Garage Agent - Monitoring";
+            trayIcon.ShowBalloonTip(2000, "Monitoring Started",
+                $"Watching for new telemetry files",
+                ToolTipIcon.Info);
+
+            LogManager.Log("File monitoring started");
+
+            // Check for existing files that haven't been uploaded
+            await ScanExistingFiles();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to start streaming: {ex.Message}", "Error",
+            LogManager.Log($"Error starting monitoring: {ex.Message}", "ERROR");
+            MessageBox.Show($"Error starting monitoring:\n{ex.Message}", "Error",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
-            await StopStreamingAsync();
         }
     }
 
-    private async void OnStopStreaming(object? sender, EventArgs e)
+    private void OnStopMonitoring(object? sender, EventArgs e)
     {
-        await StopStreamingAsync();
+        StopMonitoring();
     }
 
-    private async Task StopStreamingAsync()
+    private void StopMonitoring()
     {
-        if (!isStreaming) return;
+        if (!isMonitoring) return;
 
-        streamingCts?.Cancel();
+        LogManager.Log("Stopping file monitoring...");
 
-        if (webSocket?.State == WebSocketState.Open)
+        if (fileWatcher != null)
         {
-            await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "User stopped", CancellationToken.None);
+            fileWatcher.EnableRaisingEvents = false;
+            fileWatcher.Dispose();
+            fileWatcher = null;
         }
 
-        webSocket?.Dispose();
-        telemetryClient?.Dispose();
+        isMonitoring = false;
+        menuStartMonitoring!.Enabled = true;
+        menuStopMonitoring!.Enabled = false;
+        trayIcon!.Text = "Ridgway Garage Agent - Stopped";
+        trayIcon.ShowBalloonTip(2000, "Monitoring Stopped", "File monitoring has been stopped.", ToolTipIcon.Info);
 
-        isStreaming = false;
-        sessionInitialized = false;
-        currentLap = 0;
-
-        // Update menu
-        trayMenu!.Items[0].Enabled = true;  // Start
-        trayMenu.Items[1].Enabled = false;  // Stop
-
-        trayIcon!.Text = "iRacing Telemetry - Stopped";
-        trayIcon.ShowBalloonTip(2000, "Stopped", "Streaming stopped", ToolTipIcon.Info);
+        LogManager.Log("File monitoring stopped");
     }
 
-    private void OnSettings(object? sender, EventArgs e)
+    private async Task ScanExistingFiles()
     {
-        var settingsForm = new SettingsForm(settings);
-        if (settingsForm.ShowDialog() == DialogResult.OK)
+        try
         {
-            settings = settingsForm.Settings;
-            SaveSettings(settings);
-            sendInterval = TimeSpan.FromMilliseconds(1000.0 / settings.UpdateRateHz);
+            LogManager.Log("Scanning for existing telemetry files...");
+            var files = Directory.GetFiles(telemetryFolder, "*.ibt");
 
-            trayIcon!.ShowBalloonTip(2000, "Settings Saved", "Configuration updated", ToolTipIcon.Info);
+            int newFiles = 0;
+            foreach (var file in files)
+            {
+                if (!uploadTracker.IsUploaded(file))
+                {
+                    newFiles++;
+                    LogManager.Log($"Found unuploaded file: {Path.GetFileName(file)}");
+                    _ = Task.Run(() => UploadFile(file));
+                }
+            }
+
+            if (newFiles == 0)
+            {
+                LogManager.Log("No new files to upload");
+            }
+            else
+            {
+                LogManager.Log($"Found {newFiles} file(s) to upload");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogManager.Log($"Error scanning files: {ex.Message}", "ERROR");
+        }
+    }
+
+    private void OnFileCreated(object sender, FileSystemEventArgs e)
+    {
+        LogManager.Log($"New file detected: {e.Name}");
+        _ = Task.Run(() => UploadFileWithDelay(e.FullPath));
+    }
+
+    private void OnFileChanged(object sender, FileSystemEventArgs e)
+    {
+        // File might still be writing, will handle with delay in upload
+    }
+
+    private async Task UploadFileWithDelay(string filePath)
+    {
+        // Wait a bit to ensure iRacing has finished writing the file
+        await Task.Delay(5000);
+        await UploadFile(filePath);
+    }
+
+    private async Task UploadFile(string filePath)
+    {
+        // Check if auto-upload is enabled
+        if (!settings.AutoUpload)
+        {
+            LogManager.Log($"Auto-upload disabled, skipping: {Path.GetFileName(filePath)}");
+            return;
+        }
+
+        // Check if already uploaded
+        if (uploadTracker.IsUploaded(filePath))
+        {
+            LogManager.Log($"File already uploaded: {Path.GetFileName(filePath)}");
+            return;
+        }
+
+        // Check if file exists and is accessible
+        if (!File.Exists(filePath))
+        {
+            LogManager.Log($"File not found: {Path.GetFileName(filePath)}", "ERROR");
+            return;
+        }
+
+        // Wait for semaphore to ensure only one upload at a time
+        await uploadSemaphore.WaitAsync();
+
+        try
+        {
+            // Wait for file to be fully written and not locked
+            int retries = 10;
+            while (retries > 0)
+            {
+                try
+                {
+                    using (var fs = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    {
+                        break; // File is accessible
+                    }
+                }
+                catch (IOException)
+                {
+                    retries--;
+                    if (retries == 0)
+                    {
+                        LogManager.Log($"File still locked after retries: {Path.GetFileName(filePath)}", "ERROR");
+                        throw;
+                    }
+                    await Task.Delay(2000);
+                }
+            }
+
+            var fileInfo = new FileInfo(filePath);
+            var fileSizeMB = fileInfo.Length / (1024.0 * 1024.0);
+            var uploadUrl = settings.ServerUrl.TrimEnd('/') + "/api/upload/";
+
+            LogManager.Log($"Uploading: {Path.GetFileName(filePath)} ({fileSizeMB:F2} MB) to {uploadUrl}");
+
+            using var form = new MultipartFormDataContent();
+            using var fileStream = File.OpenRead(filePath);
+            using var fileContent = new StreamContent(fileStream);
+
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+            form.Add(fileContent, "file", Path.GetFileName(filePath));
+
+            // Add API token as header
+            httpClient.DefaultRequestHeaders.Clear();
+            httpClient.DefaultRequestHeaders.Add("Authorization", $"Token {settings.ApiToken}");
+
+            LogManager.Log($"Sending POST request to {uploadUrl}...");
+
+            var response = await httpClient.PostAsync(uploadUrl, form);
+
+            LogManager.Log($"Received response: {response.StatusCode}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                uploadTracker.MarkAsUploaded(filePath);
+                LogManager.Log($"Successfully uploaded: {Path.GetFileName(filePath)}");
+
+                BeginInvoke(() =>
+                {
+                    trayIcon?.ShowBalloonTip(3000, "Upload Complete",
+                        $"Uploaded: {Path.GetFileName(filePath)}",
+                        ToolTipIcon.Info);
+                });
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                LogManager.Log($"Upload failed ({response.StatusCode}): {Path.GetFileName(filePath)} - {errorContent}", "ERROR");
+
+                BeginInvoke(() =>
+                {
+                    trayIcon?.ShowBalloonTip(5000, "Upload Failed",
+                        $"Failed to upload: {Path.GetFileName(filePath)}\n{response.StatusCode}",
+                        ToolTipIcon.Error);
+                });
+            }
+        }
+        catch (TaskCanceledException ex)
+        {
+            LogManager.Log($"Upload timeout for {Path.GetFileName(filePath)}: {ex.Message}", "ERROR");
+        }
+        catch (HttpRequestException ex)
+        {
+            LogManager.Log($"Network error uploading {Path.GetFileName(filePath)}: {ex.Message}", "ERROR");
+            if (ex.InnerException != null)
+            {
+                LogManager.Log($"  Inner exception: {ex.InnerException.Message}", "ERROR");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogManager.Log($"Unexpected error uploading {Path.GetFileName(filePath)}: {ex.GetType().Name} - {ex.Message}", "ERROR");
+            LogManager.Log($"  Stack trace: {ex.StackTrace}", "ERROR");
+        }
+        finally
+        {
+            // Always release the semaphore
+            uploadSemaphore.Release();
         }
     }
 
     private void OnViewLog(object? sender, EventArgs e)
     {
-        ShowStatusWindow();
+        var logForm = new LogForm();
+        logForm.Show();
+    }
+
+    private void OnSettings(object? sender, EventArgs e)
+    {
+        var settingsForm = new SettingsForm(settings, telemetryFolder);
+        if (settingsForm.ShowDialog() == DialogResult.OK)
+        {
+            settings = settingsForm.GetSettings();
+            telemetryFolder = settingsForm.GetTelemetryFolder();
+            SaveSettings(settings, telemetryFolder);
+            LogManager.Log("Settings updated");
+            LogManager.Log($"Monitoring folder: {telemetryFolder}");
+        }
     }
 
     private void OnExit(object? sender, EventArgs e)
@@ -263,334 +561,632 @@ public class MainForm : Form
         Application.Exit();
     }
 
-    private async Task<bool> ConnectToServerAsync()
+    private AppSettings LoadSettings()
     {
         try
         {
-            await webSocket!.ConnectAsync(new Uri(settings.ServerUrl), CancellationToken.None);
-            _ = Task.Run(ReceiveMessagesAsync);
+            string settingsPath = Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory,
+                "appsettings.json"
+            );
 
-            // Send client_connected message immediately so server knows we're here
-            await SendMessageAsync(new
+            if (File.Exists(settingsPath))
             {
-                type = "client_connected",
-                api_token = settings.ApiToken
-            });
-
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private async Task ReceiveMessagesAsync()
-    {
-        var buffer = new byte[4096];
-        try
-        {
-            while (webSocket!.State == WebSocketState.Open)
-            {
-                var result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                if (result.MessageType == WebSocketMessageType.Close)
-                    break;
-
-                string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                HandleServerMessage(message);
-            }
-        }
-        catch { }
-    }
-
-    private void HandleServerMessage(string message)
-    {
-        try
-        {
-            var doc = JsonDocument.Parse(message);
-            var root = doc.RootElement;
-
-            if (root.TryGetProperty("type", out var typeElement))
-            {
-                string messageType = typeElement.GetString() ?? "";
-
-                if (messageType == "session_created" && root.TryGetProperty("session_id", out var sessionIdElement))
+                string json = File.ReadAllText(settingsPath);
+                var settings = JsonSerializer.Deserialize<AppSettings>(json, new JsonSerializerOptions
                 {
-                    BeginInvoke(() =>
-                    {
-                        trayIcon!.ShowBalloonTip(3000, "Session Created",
-                            $"Session ID: {sessionIdElement.GetInt32()}",
-                            ToolTipIcon.Info);
-                    });
-                }
-                else if (messageType == "events")
-                {
-                    if (root.TryGetProperty("events", out var eventsElement))
-                    {
-                        foreach (var evt in eventsElement.EnumerateArray())
-                        {
-                            if (evt.TryGetProperty("type", out var eventType) &&
-                                eventType.GetString() == "lap_completed")
-                            {
-                                var lapNum = evt.GetProperty("lap_number").GetInt32();
-                                var lapTime = evt.GetProperty("lap_time").GetDouble();
+                    PropertyNameCaseInsensitive = true
+                });
 
-                                BeginInvoke(() =>
-                                {
-                                    trayIcon!.ShowBalloonTip(2000, $"Lap {lapNum} Complete",
-                                        $"Time: {lapTime:F3}s",
-                                        ToolTipIcon.Info);
-                                });
-                            }
-                        }
-                    }
+                if (settings != null)
+                {
+                    LogManager.Log("Settings loaded successfully");
+                    return settings;
                 }
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            LogManager.Log($"Error loading settings: {ex.Message}", "ERROR");
+        }
+
+        LogManager.Log("Using default settings");
+        return new AppSettings
+        {
+            ServerUrl = "http://localhost:8000",
+            ApiToken = "",
+            TelemetryFolder = ""
+        };
     }
 
-    private async void OnTelemetryUpdate(object? sender, TelemetryData telemetry)
+    private void SaveSettings(AppSettings settings, string telemetryFolder)
     {
-        if (!sessionInitialized && telemetry.IsOnTrackCar)
+        try
         {
-            await SendSessionInitAsync();
-            sessionInitialized = true;
+            settings.TelemetryFolder = telemetryFolder;
 
-            BeginInvoke(() =>
+            string settingsPath = Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory,
+                "appsettings.json"
+            );
+
+            string json = JsonSerializer.Serialize(settings, new JsonSerializerOptions
             {
-                trayIcon!.Text = "iRacing Telemetry - Streaming";
-                trayIcon.ShowBalloonTip(2000, "iRacing Connected", "Now streaming telemetry", ToolTipIcon.Info);
+                WriteIndented = true
             });
+
+            File.WriteAllText(settingsPath, json);
+            LogManager.Log("Settings saved");
         }
-
-        if (!telemetry.IsOnTrackCar) return;
-
-        var now = DateTime.UtcNow;
-        if (now - lastSendTime < sendInterval) return;
-        lastSendTime = now;
-
-        int lap = telemetry.Lap;
-        if (lap != currentLap && lap > 0)
+        catch (Exception ex)
         {
-            currentLap = lap;
-            BeginInvoke(() => trayIcon!.Text = $"iRacing Telemetry - Lap {currentLap}");
+            LogManager.Log($"Error saving settings: {ex.Message}", "ERROR");
         }
-
-        var telemetryData = new
-        {
-            session_time = telemetry.SessionTime,
-            lap_distance = telemetry.LapDist,
-            lap_distance_pct = telemetry.LapDistPct,
-            lap_number = telemetry.Lap,
-            lap_time = telemetry.LapCurrentLapTime,
-            speed = telemetry.Speed,
-            rpm = telemetry.RPM,
-            gear = telemetry.Gear,
-            throttle = telemetry.Throttle,
-            brake = telemetry.Brake,
-            steering = telemetry.SteeringWheelAngle,
-            clutch = telemetry.Clutch,
-            lat = telemetry.Lat,
-            lon = telemetry.Lon,
-            lf_tire_temp = telemetry.LFtempCL,
-            rf_tire_temp = telemetry.RFtempCL,
-            lr_tire_temp = telemetry.LRtempCL,
-            rr_tire_temp = telemetry.RRtempCL,
-            lf_tire_pressure = telemetry.LFpressure,
-            rf_tire_pressure = telemetry.RFpressure,
-            lr_tire_pressure = telemetry.LRpressure,
-            rr_tire_pressure = telemetry.RRpressure,
-            fuel_level = telemetry.FuelLevel,
-            fuel_use_per_hour = telemetry.FuelUsePerHour,
-            player_track_surface = (int)telemetry.PlayerTrackSurface,
-            on_pit_road = telemetry.OnPitRoad
-        };
-
-        await SendTelemetryAsync(telemetryData);
-    }
-
-    private async Task SendSessionInitAsync()
-    {
-        var message = new
-        {
-            type = "session_init",
-            session_info = new
-            {
-                track_name = "Unknown Track",
-                track_config = "",
-                car_name = "Unknown Car",
-                session_type = "practice",
-                driver_name = Environment.UserName
-            }
-        };
-        await SendMessageAsync(message);
-    }
-
-    private async Task SendTelemetryAsync(object telemetryData)
-    {
-        if (!sessionInitialized) return;
-        await SendMessageAsync(new { type = "telemetry", data = telemetryData });
-    }
-
-    private async Task SendMessageAsync(object message)
-    {
-        if (webSocket?.State != WebSocketState.Open) return;
-        try
-        {
-            string json = JsonSerializer.Serialize(message);
-            byte[] bytes = Encoding.UTF8.GetBytes(json);
-            await webSocket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
-        }
-        catch { }
-    }
-
-    private static AppSettings LoadSettings()
-    {
-        try
-        {
-            string json = File.ReadAllText("appsettings.json");
-            return JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
-        }
-        catch
-        {
-            return new AppSettings();
-        }
-    }
-
-    private static void SaveSettings(AppSettings settings)
-    {
-        try
-        {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            string json = JsonSerializer.Serialize(settings, options);
-            File.WriteAllText("appsettings.json", json);
-        }
-        catch { }
     }
 }
 
 public class AppSettings
 {
-    public string ServerUrl { get; set; } = "ws://localhost:42069/ws/telemetry/live/";
+    public string ServerUrl { get; set; } = "http://localhost:42069";
     public string ApiToken { get; set; } = "";
-    public int UpdateRateHz { get; set; } = 60;
+    public string? TelemetryFolder { get; set; }
+    public bool AutoUpload { get; set; } = true;
 }
 
-// Settings Form
-public class SettingsForm : Form
+public class UploadTracker
 {
-    private TextBox txtServerUrl;
-    private TextBox txtApiToken;
-    private NumericUpDown numUpdateRate;
-    private Button btnOK, btnCancel, btnTest;
+    private HashSet<string> uploadedFiles;
+    private string trackerFilePath;
 
-    public AppSettings Settings { get; private set; }
-
-    public SettingsForm(AppSettings settings)
+    public UploadTracker()
     {
-        Settings = new AppSettings
-        {
-            ServerUrl = settings.ServerUrl,
-            ApiToken = settings.ApiToken,
-            UpdateRateHz = settings.UpdateRateHz
-        };
-
-        this.Text = "Settings";
-        this.Size = new Size(500, 300);
-        this.FormBorderStyle = FormBorderStyle.FixedDialog;
-        this.StartPosition = FormStartPosition.CenterScreen;
-        this.MaximizeBox = false;
-        this.MinimizeBox = false;
-
-        // Server URL
-        var lblServer = new Label { Text = "Server URL:", Location = new Point(20, 20), AutoSize = true };
-        txtServerUrl = new TextBox { Location = new Point(20, 45), Size = new Size(440, 25), Text = Settings.ServerUrl };
-
-        // API Token
-        var lblToken = new Label { Text = "API Token:", Location = new Point(20, 80), AutoSize = true };
-        txtApiToken = new TextBox { Location = new Point(20, 105), Size = new Size(440, 25), Text = Settings.ApiToken, UseSystemPasswordChar = true };
-
-        // Update Rate
-        var lblRate = new Label { Text = "Update Rate (Hz):", Location = new Point(20, 140), AutoSize = true };
-        numUpdateRate = new NumericUpDown { Location = new Point(20, 165), Size = new Size(200, 25), Minimum = 1, Maximum = 60, Value = Settings.UpdateRateHz };
-
-        // Buttons
-        btnTest = new Button { Text = "Test Connection", Location = new Point(20, 210), Size = new Size(130, 30) };
-        btnTest.Click += BtnTest_Click;
-
-        btnOK = new Button { Text = "OK", Location = new Point(280, 210), Size = new Size(90, 30), DialogResult = DialogResult.OK };
-        btnOK.Click += (s, e) =>
-        {
-            Settings.ServerUrl = txtServerUrl.Text;
-            Settings.ApiToken = txtApiToken.Text;
-            Settings.UpdateRateHz = (int)numUpdateRate.Value;
-        };
-
-        btnCancel = new Button { Text = "Cancel", Location = new Point(380, 210), Size = new Size(90, 30), DialogResult = DialogResult.Cancel };
-
-        this.Controls.AddRange(new Control[] { lblServer, txtServerUrl, lblToken, txtApiToken, lblRate, numUpdateRate, btnTest, btnOK, btnCancel });
-        this.AcceptButton = btnOK;
-        this.CancelButton = btnCancel;
+        trackerFilePath = Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory,
+            "uploaded_files.json"
+        );
+        LoadTrackedFiles();
     }
 
-    private async void BtnTest_Click(object? sender, EventArgs e)
+    private void LoadTrackedFiles()
     {
-        btnTest.Enabled = false;
-        btnTest.Text = "Testing...";
-
         try
         {
-            using var testSocket = new ClientWebSocket();
-            await testSocket.ConnectAsync(new Uri(txtServerUrl.Text), CancellationToken.None);
-            await testSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Test", CancellationToken.None);
-
-            MessageBox.Show("Connection successful!", "Test Result", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (File.Exists(trackerFilePath))
+            {
+                string json = File.ReadAllText(trackerFilePath);
+                uploadedFiles = JsonSerializer.Deserialize<HashSet<string>>(json) ?? new HashSet<string>();
+                LogManager.Log($"Loaded {uploadedFiles.Count} tracked files");
+            }
+            else
+            {
+                uploadedFiles = new HashSet<string>();
+            }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Connection failed:\n{ex.Message}", "Test Result", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            LogManager.Log($"Error loading tracked files: {ex.Message}", "ERROR");
+            uploadedFiles = new HashSet<string>();
         }
-        finally
+    }
+
+    private void SaveTrackedFiles()
+    {
+        try
         {
-            btnTest.Enabled = true;
-            btnTest.Text = "Test Connection";
+            string json = JsonSerializer.Serialize(uploadedFiles, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+            File.WriteAllText(trackerFilePath, json);
+        }
+        catch (Exception ex)
+        {
+            LogManager.Log($"Error saving tracked files: {ex.Message}", "ERROR");
+        }
+    }
+
+    public bool IsUploaded(string filePath)
+    {
+        return uploadedFiles.Contains(filePath);
+    }
+
+    public void MarkAsUploaded(string filePath)
+    {
+        uploadedFiles.Add(filePath);
+        SaveTrackedFiles();
+    }
+
+    public int GetUploadedCount()
+    {
+        return uploadedFiles.Count;
+    }
+}
+
+public static class LogManager
+{
+    private static readonly object lockObj = new object();
+    private static readonly List<string> logMessages = new List<string>();
+    private const int MaxMessages = 1000;
+
+    public static event Action<string>? LogAdded;
+
+    public static void Log(string message, string level = "INFO")
+    {
+        var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        var logEntry = $"[{timestamp}] [{level}] {message}";
+
+        lock (lockObj)
+        {
+            logMessages.Add(logEntry);
+            if (logMessages.Count > MaxMessages)
+            {
+                logMessages.RemoveAt(0);
+            }
+        }
+
+        LogAdded?.Invoke(logEntry);
+    }
+
+    public static string[] GetAllLogs()
+    {
+        lock (lockObj)
+        {
+            return logMessages.ToArray();
+        }
+    }
+
+    public static void Clear()
+    {
+        lock (lockObj)
+        {
+            logMessages.Clear();
         }
     }
 }
 
-// Status Form
+public class LogForm : Form
+{
+    private TextBox txtLog;
+    private Button btnClear, btnSave, btnClose;
+
+    public LogForm()
+    {
+        this.Text = "Agent Log";
+        this.Size = new Size(800, 600);
+        this.StartPosition = FormStartPosition.CenterScreen;
+        this.FormBorderStyle = FormBorderStyle.Sizable;
+
+        // Log text box
+        txtLog = new TextBox
+        {
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical,
+            Font = new Font("Consolas", 9),
+            Location = new Point(10, 10),
+            Size = new Size(760, 500),
+            Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right
+        };
+
+        // Load existing logs
+        txtLog.Text = string.Join(Environment.NewLine, LogManager.GetAllLogs());
+        txtLog.SelectionStart = txtLog.Text.Length;
+        txtLog.ScrollToCaret();
+
+        // Subscribe to new log events
+        LogManager.LogAdded += OnLogAdded;
+
+        // Buttons
+        btnClear = new Button
+        {
+            Text = "Clear",
+            Location = new Point(10, 520),
+            Size = new Size(100, 30),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+        };
+        btnClear.Click += (s, e) =>
+        {
+            LogManager.Clear();
+            txtLog.Clear();
+        };
+
+        btnSave = new Button
+        {
+            Text = "Save to File",
+            Location = new Point(120, 520),
+            Size = new Size(120, 30),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+        };
+        btnSave.Click += BtnSave_Click;
+
+        btnClose = new Button
+        {
+            Text = "Close",
+            Location = new Point(670, 520),
+            Size = new Size(100, 30),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Right
+        };
+        btnClose.Click += (s, e) => this.Close();
+
+        this.Controls.AddRange(new Control[] { txtLog, btnClear, btnSave, btnClose });
+        this.AcceptButton = btnClose;
+        this.FormClosing += (s, e) => LogManager.LogAdded -= OnLogAdded;
+    }
+
+    private void OnLogAdded(string logEntry)
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(() => OnLogAdded(logEntry));
+            return;
+        }
+
+        txtLog.AppendText(logEntry + Environment.NewLine);
+        txtLog.SelectionStart = txtLog.Text.Length;
+        txtLog.ScrollToCaret();
+    }
+
+    private void BtnSave_Click(object? sender, EventArgs e)
+    {
+        using var saveDialog = new SaveFileDialog
+        {
+            Filter = "Log Files (*.log)|*.log|Text Files (*.txt)|*.txt|All Files (*.*)|*.*",
+            DefaultExt = "log",
+            FileName = $"agent_log_{DateTime.Now:yyyyMMdd_HHmmss}.log"
+        };
+
+        if (saveDialog.ShowDialog() == DialogResult.OK)
+        {
+            try
+            {
+                File.WriteAllLines(saveDialog.FileName, LogManager.GetAllLogs());
+                MessageBox.Show("Log saved successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error saving log:\n{ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+    }
+}
+
 public class StatusForm : Form
 {
-    public StatusForm(bool isStreaming, AppSettings settings, int currentLap)
+    public StatusForm(bool isMonitoring, AppSettings settings, string telemetryFolder, int uploadedCount)
     {
-        this.Text = "Status";
-        this.Size = new Size(400, 300);
-        this.FormBorderStyle = FormBorderStyle.FixedDialog;
+        this.Text = "Agent Status";
+        this.Size = new Size(500, 380);
         this.StartPosition = FormStartPosition.CenterScreen;
+        this.FormBorderStyle = FormBorderStyle.FixedDialog;
         this.MaximizeBox = false;
-        this.MinimizeBox = false;
 
-        var status = new Label
+        var lblTitle = new Label
         {
+            Text = "Ridgway Garage Agent",
+            Font = new Font(Font.FontFamily, 14, FontStyle.Bold),
             Location = new Point(20, 20),
-            Size = new Size(360, 200),
-            Text = $"Status: {(isStreaming ? "STREAMING" : "STOPPED")}\n\n" +
-                   $"Server: {settings.ServerUrl}\n" +
-                   $"API Token: {(string.IsNullOrEmpty(settings.ApiToken) ? "Not Set" : "***" + settings.ApiToken.Substring(Math.Max(0, settings.ApiToken.Length - 4)))}\n" +
-                   $"Update Rate: {settings.UpdateRateHz} Hz\n" +
-                   $"Current Lap: {(currentLap > 0 ? currentLap.ToString() : "N/A")}"
+            Size = new Size(450, 30)
+        };
+
+        var lblStatus = new Label
+        {
+            Text = $"Status: {(isMonitoring ? "Monitoring" : "Stopped")}",
+            Location = new Point(20, 60),
+            Size = new Size(450, 25)
+        };
+
+        var lblFolder = new Label
+        {
+            Text = $"Telemetry Folder:",
+            Location = new Point(20, 90),
+            Size = new Size(450, 20)
+        };
+
+        var txtFolder = new TextBox
+        {
+            Text = telemetryFolder,
+            Location = new Point(20, 115),
+            Size = new Size(450, 25),
+            ReadOnly = true
+        };
+
+        var lblServer = new Label
+        {
+            Text = $"Server: {settings.ServerUrl}",
+            Location = new Point(20, 150),
+            Size = new Size(450, 25)
+        };
+
+        var lblToken = new Label
+        {
+            Text = $"API Token: {(string.IsNullOrEmpty(settings.ApiToken) ? "Not configured" : "Configured")}",
+            Location = new Point(20, 180),
+            Size = new Size(450, 25)
+        };
+
+        var lblUploaded = new Label
+        {
+            Text = $"Files Uploaded: {uploadedCount}",
+            Location = new Point(20, 210),
+            Size = new Size(450, 25)
+        };
+
+        var lblAutoUpload = new Label
+        {
+            Text = $"Auto-Upload: {(settings.AutoUpload ? "Enabled" : "Disabled")}",
+            Location = new Point(20, 240),
+            Size = new Size(450, 25)
         };
 
         var btnClose = new Button
         {
             Text = "Close",
-            Location = new Point(150, 230),
-            Size = new Size(100, 30),
+            Location = new Point(185, 280),
+            Size = new Size(120, 35),
             DialogResult = DialogResult.OK
         };
 
-        this.Controls.AddRange(new Control[] { status, btnClose });
+        this.Controls.AddRange(new Control[] {
+            lblTitle, lblStatus, lblFolder, txtFolder, lblServer, lblToken, lblUploaded, lblAutoUpload, btnClose
+        });
+
         this.AcceptButton = btnClose;
+    }
+}
+
+public class SettingsForm : Form
+{
+    private TextBox txtServerUrl, txtApiToken, txtTelemetryFolder;
+    private CheckBox chkAutoUpload;
+    private Button btnShowToken;
+    private AppSettings settings;
+    private string telemetryFolder;
+    private bool tokenVisible = false;
+
+    public SettingsForm(AppSettings currentSettings, string currentTelemetryFolder)
+    {
+        settings = currentSettings;
+        telemetryFolder = currentTelemetryFolder;
+
+        this.Text = "Settings";
+        this.Size = new Size(550, 360);
+        this.StartPosition = FormStartPosition.CenterScreen;
+        this.FormBorderStyle = FormBorderStyle.FixedDialog;
+        this.MaximizeBox = false;
+
+        var lblServer = new Label
+        {
+            Text = "Server URL:",
+            Location = new Point(20, 20),
+            Size = new Size(100, 25)
+        };
+
+        txtServerUrl = new TextBox
+        {
+            Text = settings.ServerUrl,
+            Location = new Point(130, 20),
+            Size = new Size(380, 25)
+        };
+
+        var lblToken = new Label
+        {
+            Text = "API Token:",
+            Location = new Point(20, 60),
+            Size = new Size(100, 25)
+        };
+
+        txtApiToken = new TextBox
+        {
+            Text = settings.ApiToken,
+            Location = new Point(130, 60),
+            Size = new Size(310, 25),
+            UseSystemPasswordChar = true
+        };
+
+        btnShowToken = new Button
+        {
+            Text = "Show",
+            Location = new Point(450, 58),
+            Size = new Size(60, 28)
+        };
+        btnShowToken.Click += BtnShowToken_Click;
+
+        var lblFolder = new Label
+        {
+            Text = "Telemetry Folder:",
+            Location = new Point(20, 100),
+            Size = new Size(100, 25)
+        };
+
+        txtTelemetryFolder = new TextBox
+        {
+            Text = telemetryFolder,
+            Location = new Point(130, 100),
+            Size = new Size(300, 25)
+        };
+
+        var btnBrowse = new Button
+        {
+            Text = "Browse...",
+            Location = new Point(440, 98),
+            Size = new Size(70, 28)
+        };
+        btnBrowse.Click += BtnBrowse_Click;
+
+        chkAutoUpload = new CheckBox
+        {
+            Text = "Automatically upload new telemetry files",
+            Location = new Point(130, 140),
+            Size = new Size(300, 25),
+            Checked = settings.AutoUpload
+        };
+
+        var btnTestConnection = new Button
+        {
+            Text = "Test Connection",
+            Location = new Point(130, 180),
+            Size = new Size(150, 35)
+        };
+        btnTestConnection.Click += BtnTestConnection_Click;
+
+        var btnSave = new Button
+        {
+            Text = "Save",
+            Location = new Point(260, 260),
+            Size = new Size(120, 35),
+            DialogResult = DialogResult.OK
+        };
+        btnSave.Click += BtnSave_Click;
+
+        var btnCancel = new Button
+        {
+            Text = "Cancel",
+            Location = new Point(390, 260),
+            Size = new Size(120, 35),
+            DialogResult = DialogResult.Cancel
+        };
+
+        this.Controls.AddRange(new Control[] {
+            lblServer, txtServerUrl, lblToken, txtApiToken, btnShowToken,
+            lblFolder, txtTelemetryFolder, btnBrowse, chkAutoUpload, btnTestConnection, btnSave, btnCancel
+        });
+
+        this.AcceptButton = btnSave;
+        this.CancelButton = btnCancel;
+    }
+
+    private void BtnShowToken_Click(object? sender, EventArgs e)
+    {
+        tokenVisible = !tokenVisible;
+        txtApiToken.UseSystemPasswordChar = !tokenVisible;
+        btnShowToken.Text = tokenVisible ? "Hide" : "Show";
+    }
+
+    private void BtnBrowse_Click(object? sender, EventArgs e)
+    {
+        using var folderDialog = new FolderBrowserDialog
+        {
+            Description = "Select iRacing telemetry folder",
+            SelectedPath = telemetryFolder,
+            ShowNewFolderButton = false
+        };
+
+        if (folderDialog.ShowDialog() == DialogResult.OK)
+        {
+            txtTelemetryFolder.Text = folderDialog.SelectedPath;
+        }
+    }
+
+    private async void BtnTestConnection_Click(object? sender, EventArgs e)
+    {
+        var serverUrl = txtServerUrl.Text.Trim();
+        var apiToken = txtApiToken.Text.Trim();
+
+        if (string.IsNullOrEmpty(serverUrl))
+        {
+            MessageBox.Show("Please enter a server URL.", "Missing Server URL", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (string.IsNullOrEmpty(apiToken))
+        {
+            MessageBox.Show("Please enter an API token.", "Missing API Token", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var btn = sender as Button;
+        if (btn != null)
+        {
+            btn.Enabled = false;
+            btn.Text = "Testing...";
+        }
+
+        try
+        {
+            using var httpClient = new HttpClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(10);
+            httpClient.DefaultRequestHeaders.Add("Authorization", $"Token {apiToken}");
+
+            // Test connection using dedicated auth test endpoint
+            var response = await httpClient.GetAsync(serverUrl.TrimEnd('/') + "/api/auth/test/");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var jsonResponse = await response.Content.ReadAsStringAsync();
+                var authData = JsonSerializer.Deserialize<JsonElement>(jsonResponse);
+
+                var username = authData.GetProperty("username").GetString();
+                var sessionCount = authData.GetProperty("sessions_count").GetInt32();
+
+                MessageBox.Show(
+                    $"Connection successful!\n\n" +
+                    $"Authenticated as: {username}\n" +
+                    $"Total sessions: {sessionCount}\n\n" +
+                    $"Server is reachable and API token is valid.",
+                    "Success",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                     response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                var errorResponse = await response.Content.ReadAsStringAsync();
+                MessageBox.Show(
+                    $"Authentication failed!\n\nServer is reachable but API token is invalid.\n\nPlease check your API token in the web interface.",
+                    "Authentication Failed",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+            else
+            {
+                MessageBox.Show(
+                    $"Connection failed!\n\nServer responded with: {response.StatusCode}",
+                    "Connection Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            MessageBox.Show(
+                "Connection timed out!\n\nCould not reach the server. Check your server URL and network connection.",
+                "Timeout",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Connection failed!\n\n{ex.Message}",
+                "Error",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+        finally
+        {
+            if (btn != null)
+            {
+                btn.Enabled = true;
+                btn.Text = "Test Connection";
+            }
+        }
+    }
+
+    private void BtnSave_Click(object? sender, EventArgs e)
+    {
+        settings.ServerUrl = txtServerUrl.Text.Trim();
+        settings.ApiToken = txtApiToken.Text.Trim();
+        settings.AutoUpload = chkAutoUpload.Checked;
+        telemetryFolder = txtTelemetryFolder.Text.Trim();
+    }
+
+    public AppSettings GetSettings()
+    {
+        return settings;
+    }
+
+    public string GetTelemetryFolder()
+    {
+        return telemetryFolder;
     }
 }

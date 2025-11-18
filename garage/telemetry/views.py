@@ -1359,3 +1359,104 @@ def live_session_detail(request, pk):
     }
 
     return render(request, 'telemetry/live_session_detail.html', context)
+
+
+def api_auth_test(request):
+    """
+    API endpoint to test authentication.
+    Returns basic user info if authenticated with valid API token.
+    """
+    from django.http import JsonResponse
+    from .models import Driver
+
+    # Check for token in Authorization header
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+
+    if not auth_header.startswith('Token '):
+        return JsonResponse({
+            'authenticated': False,
+            'error': 'Missing or invalid Authorization header'
+        }, status=401)
+
+    token_key = auth_header.replace('Token ', '').strip()
+
+    # Find driver by API token
+    try:
+        driver_profile = Driver.objects.select_related('user').get(api_token=token_key)
+        driver = driver_profile.user
+
+        return JsonResponse({
+            'authenticated': True,
+            'username': driver.username,
+            'email': driver.email,
+            'sessions_count': Session.objects.filter(driver=driver).count(),
+            'server_url': f"{request.scheme}://{request.get_host()}"
+        })
+    except Driver.DoesNotExist:
+        return JsonResponse({
+            'authenticated': False,
+            'error': 'Invalid API token'
+        }, status=401)
+
+
+from django.views.decorators.csrf import csrf_exempt
+
+@csrf_exempt
+def api_upload(request):
+    """
+    API endpoint for uploading telemetry files with API token authentication.
+    """
+    from django.http import JsonResponse
+    from .models import Driver
+
+    # Only accept POST
+    if request.method != 'POST':
+        return JsonResponse({
+            'error': 'Only POST method is allowed'
+        }, status=405)
+
+    # Check for token in Authorization header
+    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+
+    if not auth_header.startswith('Token '):
+        return JsonResponse({
+            'error': 'Missing or invalid Authorization header'
+        }, status=401)
+
+    token_key = auth_header.replace('Token ', '').strip()
+
+    # Find driver by API token
+    try:
+        driver_profile = Driver.objects.select_related('user').get(api_token=token_key)
+        driver = driver_profile.user
+    except Driver.DoesNotExist:
+        return JsonResponse({
+            'error': 'Invalid API token'
+        }, status=401)
+
+    # Check if file was uploaded
+    if 'file' not in request.FILES:
+        return JsonResponse({
+            'error': 'No file provided'
+        }, status=400)
+
+    uploaded_file = request.FILES['file']
+
+    # Create session
+    session = Session(
+        driver=driver,
+        ibt_file=uploaded_file,
+        processing_status='pending'
+    )
+    session.save()
+
+    # Queue Celery task for processing
+    from .tasks import parse_ibt_file
+    parse_ibt_file.delay(session.id)
+
+    return JsonResponse({
+        'success': True,
+        'session_id': session.id,
+        'filename': uploaded_file.name,
+        'message': 'File uploaded successfully and queued for processing'
+    }, status=201)
