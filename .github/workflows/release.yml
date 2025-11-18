@@ -1,0 +1,68 @@
+name: Build and Release Windows Client
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v1.2.3, etc.
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore iRacingTelemetryClient/iRacingTelemetryClient.csproj
+
+    - name: Publish self-contained executable
+      run: |
+        dotnet publish iRacingTelemetryClient/iRacingTelemetryClient.csproj `
+          -c Release `
+          -r win-x64 `
+          --self-contained true `
+          -p:PublishSingleFile=true `
+          -o ./publish
+
+    - name: Remove debug symbols
+      run: Remove-Item ./publish/*.pdb -Force
+
+    - name: Create release ZIP
+      run: |
+        $version = "${{ github.ref_name }}"
+        Compress-Archive -Path ./publish/* -DestinationPath "iRacingTelemetryClient-$version.zip"
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: iRacingTelemetryClient-*.zip
+        body: |
+          ## iRacing Telemetry Client ${{ github.ref_name }}
+
+          ### Installation
+          1. Download `iRacingTelemetryClient-${{ github.ref_name }}.zip`
+          2. Extract to a folder (e.g., `C:\iRacingTelemetryClient`)
+          3. Edit `appsettings.json` with your server URL and driver ID
+          4. Run `iRacingTelemetryClient.exe`
+
+          ### Requirements
+          - Windows 10/11 (64-bit)
+          - iRacing installed
+          - No .NET runtime required (self-contained)
+
+          ### What's Included
+          - Self-contained executable with all dependencies
+          - Configuration file (appsettings.json)
+          - Application icon
+
+          **File Size:** ~155 MB (self-contained .NET 8 runtime included)
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
