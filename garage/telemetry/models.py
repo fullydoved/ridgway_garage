@@ -20,6 +20,15 @@ class Driver(models.Model):
     iracing_id = models.CharField(max_length=50, blank=True, null=True, help_text="iRacing Member ID")
     display_name = models.CharField(max_length=100, blank=True, help_text="Display name for leaderboards")
 
+    # API Authentication
+    api_token = models.CharField(
+        max_length=64,
+        blank=True,
+        unique=True,
+        null=True,
+        help_text="API token for telemetry client authentication"
+    )
+
     # Settings and preferences
     default_team = models.ForeignKey('Team', on_delete=models.SET_NULL, null=True, blank=True, related_name='default_members')
     timezone = models.CharField(max_length=50, default='UTC')
@@ -33,6 +42,13 @@ class Driver(models.Model):
 
     def __str__(self):
         return self.display_name or self.user.username
+
+    def generate_api_token(self):
+        """Generate a new API token for this driver."""
+        import secrets
+        self.api_token = secrets.token_urlsafe(48)
+        self.save(update_fields=['api_token'])
+        return self.api_token
 
 
 class Team(models.Model):

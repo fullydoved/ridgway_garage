@@ -4,9 +4,11 @@ WebSocket consumers for real-time telemetry processing updates and live streamin
 
 import json
 import logging
+import time
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import User
+from django.core.cache import cache
 
 from .services.live_telemetry import LiveTelemetrySession, get_session_metadata_from_iracing
 from .models import Session
@@ -137,6 +139,7 @@ class LiveTelemetryConsumer(AsyncWebsocketConsumer):
         self.session = None
         self.live_session = None
         self.driver = None
+        self.client_id = None
 
     async def connect(self):
         """Handle WebSocket connection from .NET client."""
@@ -154,6 +157,10 @@ class LiveTelemetryConsumer(AsyncWebsocketConsumer):
 
     async def disconnect(self, close_code):
         """Handle WebSocket disconnection."""
+        # Remove from connected clients list
+        if self.client_id:
+            await self._remove_connected_client()
+
         # Finish the session if one was created
         if self.live_session:
             await self._finish_session()
@@ -165,14 +172,19 @@ class LiveTelemetryConsumer(AsyncWebsocketConsumer):
         Receive message from .NET client.
 
         Expected message types:
-        1. Session initialization:
+        1. Client connected (sent immediately on connection):
+           {
+               'type': 'client_connected',
+               'api_token': 'abc123...'
+           }
+
+        2. Session initialization:
            {
                'type': 'session_init',
-               'driver_id': 123,
                'session_info': {...metadata...}
            }
 
-        2. Telemetry data:
+        3. Telemetry data:
            {
                'type': 'telemetry',
                'data': {...telemetry sample...}
@@ -182,7 +194,10 @@ class LiveTelemetryConsumer(AsyncWebsocketConsumer):
             message = json.loads(text_data)
             message_type = message.get('type')
 
-            if message_type == 'session_init':
+            if message_type == 'client_connected':
+                await self._handle_client_connected(message)
+
+            elif message_type == 'session_init':
                 await self._handle_session_init(message)
 
             elif message_type == 'telemetry':
@@ -205,18 +220,50 @@ class LiveTelemetryConsumer(AsyncWebsocketConsumer):
                 'message': str(e)
             }))
 
-    async def _handle_session_init(self, message):
-        """Handle session initialization from client."""
-        driver_id = message.get('driver_id')
-        session_info_raw = message.get('session_info', {})
+    async def _handle_client_connected(self, message):
+        """Handle initial client connection before iRacing starts."""
+        api_token = message.get('api_token')
 
-        # Get driver
-        self.driver = await self._get_driver(driver_id)
+        if not api_token:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'API token is required'
+            }))
+            await self.close()
+            return
+
+        # Authenticate user by token
+        self.driver = await self._get_driver_by_token(api_token)
 
         if not self.driver:
             await self.send(text_data=json.dumps({
                 'type': 'error',
-                'message': f'Driver with ID {driver_id} not found'
+                'message': 'Invalid API token'
+            }))
+            await self.close()
+            return
+
+        # Track this connected client in Redis as "waiting"
+        self.client_id = f"driver_{self.driver.id}"
+        await self._add_connected_client(self.driver.id, self.driver.username)
+
+        logger.info(f"Client connected: {self.driver.username} (waiting for iRacing)")
+
+        # Send success message
+        await self.send(text_data=json.dumps({
+            'type': 'authenticated',
+            'message': f'Authenticated as {self.driver.username}'
+        }))
+
+    async def _handle_session_init(self, message):
+        """Handle session initialization from client."""
+        session_info_raw = message.get('session_info', {})
+
+        # Ensure client is authenticated
+        if not self.driver:
+            await self.send(text_data=json.dumps({
+                'type': 'error',
+                'message': 'Not authenticated. Send client_connected message first.'
             }))
             return
 
@@ -249,6 +296,10 @@ class LiveTelemetryConsumer(AsyncWebsocketConsumer):
 
         telemetry_data = message.get('data', {})
 
+        # Update client status to "streaming" in cache
+        if self.client_id:
+            await self._update_client_status('streaming')
+
         # Process telemetry
         result = await self._process_telemetry(telemetry_data)
 
@@ -271,11 +322,13 @@ class LiveTelemetryConsumer(AsyncWebsocketConsumer):
             }))
 
     @database_sync_to_async
-    def _get_driver(self, driver_id):
-        """Get driver from database."""
+    def _get_driver_by_token(self, api_token):
+        """Get driver from database by API token."""
+        from .models import Driver
         try:
-            return User.objects.get(id=driver_id)
-        except User.DoesNotExist:
+            driver_profile = Driver.objects.select_related('user').get(api_token=api_token)
+            return driver_profile.user
+        except Driver.DoesNotExist:
             return None
 
     @database_sync_to_async
@@ -295,6 +348,40 @@ class LiveTelemetryConsumer(AsyncWebsocketConsumer):
     def _finish_session(self):
         """Finish the live session."""
         self.live_session.finish_session()
+
+    async def _add_connected_client(self, driver_id, driver_name):
+        """Add connected client to Redis cache."""
+        client_data = {
+            'driver_id': driver_id,
+            'driver_name': driver_name,
+            'connected_at': time.time(),
+            'status': 'waiting_for_data'
+        }
+        # Store client info in cache with 5 minute timeout (refreshed on telemetry)
+        await database_sync_to_async(cache.set)(
+            f'live_client_{self.client_id}',
+            client_data,
+            timeout=300
+        )
+
+    async def _remove_connected_client(self):
+        """Remove connected client from Redis cache."""
+        await database_sync_to_async(cache.delete)(
+            f'live_client_{self.client_id}'
+        )
+
+    async def _update_client_status(self, status):
+        """Update client status in cache."""
+        client_data = await database_sync_to_async(cache.get)(
+            f'live_client_{self.client_id}'
+        )
+        if client_data:
+            client_data['status'] = status
+            await database_sync_to_async(cache.set)(
+                f'live_client_{self.client_id}',
+                client_data,
+                timeout=300
+            )
 
 
 class LiveSessionViewerConsumer(AsyncWebsocketConsumer):

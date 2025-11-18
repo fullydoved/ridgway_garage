@@ -1274,6 +1274,8 @@ def live_sessions(request):
     """
     Display list of currently active live telemetry sessions.
     """
+    from django.core.cache import cache
+
     # Get all active live sessions, ordered by last update
     active_sessions = Session.objects.filter(
         is_live=True,
@@ -1291,12 +1293,51 @@ def live_sessions(request):
         last_telemetry_update__gte=recent_cutoff
     ).select_related('driver', 'team', 'track', 'car').order_by('-last_telemetry_update')
 
+    # Get connected clients waiting for data (from cache)
+    # Only show clients that are waiting (not streaming, as those show in active_sessions)
+    connected_clients = []
+    # Scan cache for live_client_* keys
+    # Note: This is a simplified approach. For production, consider maintaining a set in Redis.
+    cache_keys = cache.keys('live_client_*') if hasattr(cache, 'keys') else []
+    for key in cache_keys:
+        client_data = cache.get(key)
+        if client_data and client_data.get('status') == 'waiting_for_data':
+            connected_clients.append(client_data)
+
     context = {
         'active_sessions': active_sessions,
         'recent_sessions': recent_sessions,
+        'connected_clients': connected_clients,
     }
 
     return render(request, 'telemetry/live_sessions.html', context)
+
+
+@login_required
+def api_token_view(request):
+    """
+    View and generate API tokens for telemetry client authentication.
+    """
+    from .models import Driver
+
+    # Get or create driver profile
+    driver_profile, created = Driver.objects.get_or_create(
+        user=request.user,
+        defaults={'display_name': request.user.username}
+    )
+
+    # Handle token generation
+    if request.method == 'POST' and 'generate_token' in request.POST:
+        driver_profile.generate_api_token()
+        messages.success(request, 'New API token generated successfully!')
+        return redirect('telemetry:api_token')
+
+    context = {
+        'driver_profile': driver_profile,
+        'has_token': bool(driver_profile.api_token),
+    }
+
+    return render(request, 'telemetry/api_token.html', context)
 
 
 def live_session_detail(request, pk):

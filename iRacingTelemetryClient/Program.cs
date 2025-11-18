@@ -269,6 +269,14 @@ public class MainForm : Form
         {
             await webSocket!.ConnectAsync(new Uri(settings.ServerUrl), CancellationToken.None);
             _ = Task.Run(ReceiveMessagesAsync);
+
+            // Send client_connected message immediately so server knows we're here
+            await SendMessageAsync(new
+            {
+                type = "client_connected",
+                api_token = settings.ApiToken
+            });
+
             return true;
         }
         catch
@@ -407,7 +415,6 @@ public class MainForm : Form
         var message = new
         {
             type = "session_init",
-            driver_id = settings.DriverId,
             session_info = new
             {
                 track_name = "Unknown Track",
@@ -466,7 +473,7 @@ public class MainForm : Form
 public class AppSettings
 {
     public string ServerUrl { get; set; } = "ws://localhost:42069/ws/telemetry/live/";
-    public int DriverId { get; set; } = 1;
+    public string ApiToken { get; set; } = "";
     public int UpdateRateHz { get; set; } = 60;
 }
 
@@ -474,7 +481,7 @@ public class AppSettings
 public class SettingsForm : Form
 {
     private TextBox txtServerUrl;
-    private NumericUpDown numDriverId;
+    private TextBox txtApiToken;
     private NumericUpDown numUpdateRate;
     private Button btnOK, btnCancel, btnTest;
 
@@ -485,12 +492,12 @@ public class SettingsForm : Form
         Settings = new AppSettings
         {
             ServerUrl = settings.ServerUrl,
-            DriverId = settings.DriverId,
+            ApiToken = settings.ApiToken,
             UpdateRateHz = settings.UpdateRateHz
         };
 
         this.Text = "Settings";
-        this.Size = new Size(500, 250);
+        this.Size = new Size(500, 300);
         this.FormBorderStyle = FormBorderStyle.FixedDialog;
         this.StartPosition = FormStartPosition.CenterScreen;
         this.MaximizeBox = false;
@@ -500,29 +507,29 @@ public class SettingsForm : Form
         var lblServer = new Label { Text = "Server URL:", Location = new Point(20, 20), AutoSize = true };
         txtServerUrl = new TextBox { Location = new Point(20, 45), Size = new Size(440, 25), Text = Settings.ServerUrl };
 
-        // Driver ID
-        var lblDriver = new Label { Text = "Driver ID:", Location = new Point(20, 80), AutoSize = true };
-        numDriverId = new NumericUpDown { Location = new Point(20, 105), Size = new Size(200, 25), Minimum = 1, Maximum = 999999, Value = Settings.DriverId };
+        // API Token
+        var lblToken = new Label { Text = "API Token:", Location = new Point(20, 80), AutoSize = true };
+        txtApiToken = new TextBox { Location = new Point(20, 105), Size = new Size(440, 25), Text = Settings.ApiToken, UseSystemPasswordChar = true };
 
         // Update Rate
-        var lblRate = new Label { Text = "Update Rate (Hz):", Location = new Point(240, 80), AutoSize = true };
-        numUpdateRate = new NumericUpDown { Location = new Point(240, 105), Size = new Size(200, 25), Minimum = 1, Maximum = 60, Value = Settings.UpdateRateHz };
+        var lblRate = new Label { Text = "Update Rate (Hz):", Location = new Point(20, 140), AutoSize = true };
+        numUpdateRate = new NumericUpDown { Location = new Point(20, 165), Size = new Size(200, 25), Minimum = 1, Maximum = 60, Value = Settings.UpdateRateHz };
 
         // Buttons
-        btnTest = new Button { Text = "Test Connection", Location = new Point(20, 160), Size = new Size(130, 30) };
+        btnTest = new Button { Text = "Test Connection", Location = new Point(20, 210), Size = new Size(130, 30) };
         btnTest.Click += BtnTest_Click;
 
-        btnOK = new Button { Text = "OK", Location = new Point(280, 160), Size = new Size(90, 30), DialogResult = DialogResult.OK };
+        btnOK = new Button { Text = "OK", Location = new Point(280, 210), Size = new Size(90, 30), DialogResult = DialogResult.OK };
         btnOK.Click += (s, e) =>
         {
             Settings.ServerUrl = txtServerUrl.Text;
-            Settings.DriverId = (int)numDriverId.Value;
+            Settings.ApiToken = txtApiToken.Text;
             Settings.UpdateRateHz = (int)numUpdateRate.Value;
         };
 
-        btnCancel = new Button { Text = "Cancel", Location = new Point(380, 160), Size = new Size(90, 30), DialogResult = DialogResult.Cancel };
+        btnCancel = new Button { Text = "Cancel", Location = new Point(380, 210), Size = new Size(90, 30), DialogResult = DialogResult.Cancel };
 
-        this.Controls.AddRange(new Control[] { lblServer, txtServerUrl, lblDriver, numDriverId, lblRate, numUpdateRate, btnTest, btnOK, btnCancel });
+        this.Controls.AddRange(new Control[] { lblServer, txtServerUrl, lblToken, txtApiToken, lblRate, numUpdateRate, btnTest, btnOK, btnCancel });
         this.AcceptButton = btnOK;
         this.CancelButton = btnCancel;
     }
@@ -570,7 +577,7 @@ public class StatusForm : Form
             Size = new Size(360, 200),
             Text = $"Status: {(isStreaming ? "STREAMING" : "STOPPED")}\n\n" +
                    $"Server: {settings.ServerUrl}\n" +
-                   $"Driver ID: {settings.DriverId}\n" +
+                   $"API Token: {(string.IsNullOrEmpty(settings.ApiToken) ? "Not Set" : "***" + settings.ApiToken.Substring(Math.Max(0, settings.ApiToken.Length - 4)))}\n" +
                    $"Update Rate: {settings.UpdateRateHz} Hz\n" +
                    $"Current Lap: {(currentLap > 0 ? currentLap.ToString() : "N/A")}"
         };

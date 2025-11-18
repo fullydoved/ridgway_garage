@@ -7,10 +7,59 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1><i class="bi bi-broadcast"></i> Live Telemetry Sessions</h1>
-            <span class="badge bg-success fs-5">
-                {{ active_sessions.count }} Active
-            </span>
+            <div>
+                {% if connected_clients %}
+                <span class="badge bg-info fs-5 me-2">
+                    {{ connected_clients|length }} Connected
+                </span>
+                {% endif %}
+                <span class="badge bg-success fs-5">
+                    {{ active_sessions.count }} Streaming
+                </span>
+            </div>
         </div>
+
+        <!-- Connected Clients (Waiting for Data) -->
+        {% if connected_clients %}
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-plug"></i> Connected Clients (Waiting for iRacing)
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Driver</th>
+                                <th>Status</th>
+                                <th>Connected</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for client in connected_clients %}
+                            <tr>
+                                <td>
+                                    <i class="bi bi-person-circle text-info"></i>
+                                    <strong>{{ client.driver_name }}</strong>
+                                </td>
+                                <td>
+                                    <span class="badge bg-warning">
+                                        <i class="bi bi-hourglass-split"></i> Waiting for data
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="text-muted">
+                                        Connected
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Active Sessions -->
         {% if active_sessions %}
@@ -87,12 +136,14 @@
             </div>
         </div>
         {% else %}
+        {% if not connected_clients %}
         <div class="alert alert-info">
             <i class="bi bi-info-circle"></i>
-            <strong>No active sessions</strong> - No drivers are currently streaming telemetry.
+            <strong>No active connections</strong> - No drivers are currently connected or streaming telemetry.
             <br>
-            <small class="text-muted">Sessions will appear here when a driver connects the iRacing client.</small>
+            <small class="text-muted">Drivers will appear here when they connect the iRacing telemetry client.</small>
         </div>
+        {% endif %}
         {% endif %}
 
         <!-- Recently Disconnected Sessions -->
