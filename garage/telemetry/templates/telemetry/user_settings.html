@@ -113,25 +113,31 @@
                     </div>
                     <div class="card-body">
                         <h5>Step 1: Download the Client</h5>
-                        <p>Download the iRacing Telemetry Client for Windows from our <a href="https://github.com/fullydoved/ridgway_garage/releases">GitHub Releases</a> page.</p>
+                        <p>Download the Ridgway Garage Agent for Windows from our <a href="https://github.com/fullydoved/ridgway_garage/releases">GitHub Releases</a> page.</p>
 
                         <h5>Step 2: Configure the Client</h5>
                         <ol>
-                            <li>Run the client and right-click the system tray icon</li>
-                            <li>Click "Settings"</li>
+                            <li>Run the client (RidgwayGarageAgent.exe) - it will appear in your system tray</li>
+                            <li>Right-click the system tray icon and select "Settings"</li>
                             <li>Paste your API token into the "API Token" field</li>
-                            <li>Set the server URL to: <code>ws://{{ request.get_host }}/ws/telemetry/live/</code></li>
-                            <li>Click "OK" to save</li>
+                            <li>Set the server URL to: <code>{{ request.scheme }}://{{ request.get_host }}</code></li>
+                            <li>Set the telemetry folder path (default: <code>C:\Users\YourUsername\Documents\iRacing\telemetry</code>)</li>
+                            <li>Enable "Auto Upload" to automatically upload new IBT files</li>
+                            <li>Click "Save" to save your settings</li>
                         </ol>
 
-                        <h5>Step 3: Start Streaming</h5>
+                        <h5>Step 3: Use iRacing</h5>
                         <ol>
-                            <li>Launch iRacing</li>
-                            <li>Right-click the client system tray icon</li>
-                            <li>Enable "Auto Upload" in the client settings</li>
-                            <li>Join a session in iRacing and complete some laps</li>
-                            <li>IBT files will automatically upload after each session</li>
+                            <li>Launch iRacing and join any session</li>
+                            <li>Complete some laps - iRacing will save telemetry files to your telemetry folder</li>
+                            <li>When you exit the session, the client will automatically detect and upload the new IBT file</li>
+                            <li>You'll see your sessions appear in the <a href="{% url 'telemetry:session_list' %}">My Sessions</a> page</li>
                         </ol>
+
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Tip:</strong> The client runs in the background and monitors your telemetry folder. Keep it running while you race for automatic uploads!
+                        </div>
                     </div>
                 </div>
             </div>
