@@ -407,7 +407,13 @@ public class MainForm : Form
 
     private void OnFileChanged(object sender, FileSystemEventArgs e)
     {
-        // File might still be writing, will handle with delay in upload
+        // If file hasn't been uploaded yet, retry the upload
+        // This handles cases where the file was locked during initial upload attempt
+        if (!uploadTracker.IsUploaded(e.FullPath))
+        {
+            LogManager.Log($"File changed and not yet uploaded, retrying: {Path.GetFileName(e.FullPath)}");
+            _ = Task.Run(() => UploadFileWithDelay(e.FullPath));
+        }
     }
 
     private async Task UploadFileWithDelay(string filePath)
@@ -446,8 +452,8 @@ public class MainForm : Form
         try
         {
             // Wait for file to be fully written and not locked
-            // iRacing can take 1-2 minutes to finish writing large IBT files (100MB+)
-            int maxRetries = 60;
+            // iRacing can take several minutes to finish writing large IBT files (100MB+)
+            int maxRetries = 120;
             int retries = 0;
             long previousFileSize = 0;
             int stableChecks = 0;
@@ -491,9 +497,9 @@ public class MainForm : Form
                 retries++;
                 if (retries >= maxRetries)
                 {
-                    LogManager.Log($"File still being written after {maxRetries} attempts (2 minutes): {Path.GetFileName(filePath)}", "WARNING");
-                    LogManager.Log($"Will retry upload automatically when file system detects changes", "INFO");
-                    return; // Don't throw - exit gracefully
+                    LogManager.Log($"File still being written after {maxRetries} attempts (4 minutes): {Path.GetFileName(filePath)}", "WARNING");
+                    LogManager.Log($"Will retry upload when file finishes writing (on file system change event)", "INFO");
+                    return; // Don't throw - exit gracefully, OnFileChanged will retry
                 }
 
                 // Exponential backoff: start at 1 second, increase to max 5 seconds
