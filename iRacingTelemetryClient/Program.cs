@@ -114,6 +114,9 @@ public class MainForm : Form
         trayMenu.Items.Add("View Log", null, OnViewLog);
         trayMenu.Items.Add("Settings", null, OnSettings);
         trayMenu.Items.Add("-");
+        trayMenu.Items.Add("Check for Updates...", null, OnCheckForUpdates);
+        trayMenu.Items.Add("About", null, OnAbout);
+        trayMenu.Items.Add("-");
         trayMenu.Items.Add("Exit", null, OnExit);
 
         // Load custom icon
@@ -587,6 +590,232 @@ public class MainForm : Form
             LogManager.Log("Settings updated");
             LogManager.Log($"Monitoring folder: {telemetryFolder}");
         }
+    }
+
+    private async void OnCheckForUpdates(object? sender, EventArgs e)
+    {
+        try
+        {
+            LogManager.Log("Checking for updates...");
+
+            var checker = new UpdateChecker();
+            var currentVersion = checker.GetCurrentVersion();
+
+            // Show checking message
+            var checkingForm = new Form
+            {
+                Text = "Checking for Updates",
+                Size = new Size(400, 150),
+                StartPosition = FormStartPosition.CenterScreen,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false
+            };
+
+            var lblChecking = new Label
+            {
+                Text = "Checking for updates...",
+                Location = new Point(20, 40),
+                Size = new Size(360, 30),
+                Font = new Font("Segoe UI", 10),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            checkingForm.Controls.Add(lblChecking);
+
+            // Show form and check for updates asynchronously
+            checkingForm.Show();
+
+            var release = await checker.CheckForUpdateAsync();
+
+            checkingForm.Close();
+            checkingForm.Dispose();
+
+            if (release == null)
+            {
+                // No update available
+                MessageBox.Show(
+                    $"You are running the latest version ({currentVersion}).",
+                    "No Updates Available",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            // Update available - show update dialog
+            ShowUpdateDialog(release, currentVersion);
+        }
+        catch (Exception ex)
+        {
+            LogManager.Log($"Error checking for updates: {ex.Message}", "ERROR");
+            MessageBox.Show(
+                $"Failed to check for updates: {ex.Message}",
+                "Update Check Failed",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+        }
+    }
+
+    private void ShowUpdateDialog(GitHubRelease release, Version currentVersion)
+    {
+        var updateForm = new Form
+        {
+            Text = "Update Available",
+            Size = new Size(500, 400),
+            StartPosition = FormStartPosition.CenterScreen,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false
+        };
+
+        // Title label
+        var lblTitle = new Label
+        {
+            Text = $"A new version of Ridgway Garage Agent is available!",
+            Location = new Point(20, 20),
+            Size = new Size(460, 25),
+            Font = new Font("Segoe UI", 10, FontStyle.Bold)
+        };
+        updateForm.Controls.Add(lblTitle);
+
+        // Version info
+        var lblVersionInfo = new Label
+        {
+            Text = $"Current version: {currentVersion}\nNew version: {release.TagName}",
+            Location = new Point(20, 55),
+            Size = new Size(460, 40),
+            Font = new Font("Segoe UI", 9)
+        };
+        updateForm.Controls.Add(lblVersionInfo);
+
+        // Release notes label
+        var lblReleaseNotes = new Label
+        {
+            Text = "Release Notes:",
+            Location = new Point(20, 105),
+            Size = new Size(460, 20),
+            Font = new Font("Segoe UI", 9, FontStyle.Bold)
+        };
+        updateForm.Controls.Add(lblReleaseNotes);
+
+        // Release notes text box
+        var txtReleaseNotes = new TextBox
+        {
+            Text = release.Body,
+            Location = new Point(20, 130),
+            Size = new Size(460, 180),
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical,
+            Font = new Font("Segoe UI", 9)
+        };
+        updateForm.Controls.Add(txtReleaseNotes);
+
+        // Buttons
+        var btnViewRelease = new Button
+        {
+            Text = "View Release Page",
+            Location = new Point(20, 325),
+            Size = new Size(140, 30),
+            Font = new Font("Segoe UI", 9)
+        };
+        btnViewRelease.Click += (s, e) =>
+        {
+            var checker = new UpdateChecker();
+            checker.OpenReleasePage(release.HtmlUrl);
+            updateForm.Close();
+        };
+        updateForm.Controls.Add(btnViewRelease);
+
+        var btnLater = new Button
+        {
+            Text = "Remind Me Later",
+            Location = new Point(170, 325),
+            Size = new Size(140, 30),
+            Font = new Font("Segoe UI", 9)
+        };
+        btnLater.Click += (s, e) => updateForm.Close();
+        updateForm.Controls.Add(btnLater);
+
+        var btnClose = new Button
+        {
+            Text = "Close",
+            Location = new Point(320, 325),
+            Size = new Size(160, 30),
+            Font = new Font("Segoe UI", 9)
+        };
+        btnClose.Click += (s, e) => updateForm.Close();
+        updateForm.Controls.Add(btnClose);
+
+        updateForm.ShowDialog();
+    }
+
+    private void OnAbout(object? sender, EventArgs e)
+    {
+        var checker = new UpdateChecker();
+        var currentVersion = checker.GetCurrentVersion();
+
+        var aboutForm = new Form
+        {
+            Text = "About Ridgway Garage Agent",
+            Size = new Size(400, 250),
+            StartPosition = FormStartPosition.CenterScreen,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false
+        };
+
+        var lblAppName = new Label
+        {
+            Text = "Ridgway Garage Agent",
+            Location = new Point(20, 20),
+            Size = new Size(360, 30),
+            Font = new Font("Segoe UI", 14, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleCenter
+        };
+        aboutForm.Controls.Add(lblAppName);
+
+        var lblVersion = new Label
+        {
+            Text = $"Version {currentVersion}",
+            Location = new Point(20, 55),
+            Size = new Size(360, 25),
+            Font = new Font("Segoe UI", 10),
+            TextAlign = ContentAlignment.MiddleCenter
+        };
+        aboutForm.Controls.Add(lblVersion);
+
+        var lblDescription = new Label
+        {
+            Text = "Automatically monitors and uploads iRacing telemetry files\nto the Ridgway Garage telemetry analysis platform.",
+            Location = new Point(20, 90),
+            Size = new Size(360, 50),
+            Font = new Font("Segoe UI", 9),
+            TextAlign = ContentAlignment.MiddleCenter
+        };
+        aboutForm.Controls.Add(lblDescription);
+
+        var lblCopyright = new Label
+        {
+            Text = "© 2025 Ridgway Garage",
+            Location = new Point(20, 150),
+            Size = new Size(360, 20),
+            Font = new Font("Segoe UI", 8),
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.Gray
+        };
+        aboutForm.Controls.Add(lblCopyright);
+
+        var btnClose = new Button
+        {
+            Text = "Close",
+            Location = new Point(150, 175),
+            Size = new Size(100, 30),
+            Font = new Font("Segoe UI", 9)
+        };
+        btnClose.Click += (s, e) => aboutForm.Close();
+        aboutForm.Controls.Add(btnClose);
+
+        aboutForm.ShowDialog();
     }
 
     private void OnExit(object? sender, EventArgs e)
