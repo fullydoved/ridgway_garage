@@ -85,17 +85,24 @@
                                     {% endif %}
                                     &nbsp;&nbsp;|&nbsp;&nbsp;
                                     <i class="bi bi-calendar"></i> {{ session.session_date|date:"M d, Y H:i" }}
+                                    {% if session.air_temp %}
+                                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                                    <span class="{% if session.air_temp < 15 %}temp-cold{% elif session.air_temp < 25 %}temp-moderate{% elif session.air_temp < 35 %}temp-hot{% else %}temp-extreme{% endif %}">
+                                        <i class="bi bi-thermometer-half"></i> {{ session.air_temp }}°C
+                                    </span>
+                                    {% endif %}
                                 </p>
-                                <span class="badge bg-secondary">{{ session.get_session_type_display }}</span>
+                                <span class="badge badge-session-type badge-{{ session.session_type }}">{{ session.get_session_type_display }}</span>
                                 {% if session.team %}
                                 <span class="badge bg-info"><i class="bi bi-people"></i> {{ session.team.name }}</span>
                                 {% endif %}
                             </div>
                             <div class="col-md-3">
-                                <div class="text-muted small">Laps: {{ session.laps.count }}</div>
+                                <div class="text-muted small mb-1"><i class="bi bi-flag"></i> Laps: <strong>{{ session.laps.count }}</strong></div>
                                 {% if session.best_lap %}
                                 <div>
-                                    Best: <span class="lap-time">
+                                    <span class="text-muted small">Best:</span>
+                                    <span class="lap-time fastest d-block" style="font-size: 1.2em;">
                                         {{ session.best_lap.lap_time|format_laptime }}
                                     </span>
                                 </div>
@@ -155,13 +162,28 @@
         </div>
         {% else %}
         <div class="card">
-            <div class="card-body text-center py-5">
-                <i class="bi bi-folder-x text-muted" style="font-size: 4rem;"></i>
-                <h4 class="mt-4">No sessions found</h4>
-                <p class="text-muted">Upload your first telemetry file to get started!</p>
-                <a href="{% url 'telemetry:upload' %}" class="btn btn-primary">
-                    <i class="bi bi-upload"></i> Upload Telemetry
-                </a>
+            <div class="card-body">
+                <div class="empty-state">
+                    <i class="bi bi-folder-x empty-state-icon"></i>
+                    <h3 class="empty-state-title">No Sessions Found</h3>
+                    <p class="empty-state-message">
+                        {% if current_track or current_car or current_status %}
+                            Try adjusting your filters or upload new sessions to see them here.
+                        {% else %}
+                            Start your telemetry journey by uploading your first iRacing session file!
+                        {% endif %}
+                    </p>
+                    <div class="empty-state-actions">
+                        {% if current_track or current_car or current_status %}
+                            <a href="{% url 'telemetry:session_list' %}" class="btn btn-outline-secondary btn-lg">
+                                <i class="bi bi-x-circle"></i> Clear Filters
+                            </a>
+                        {% endif %}
+                        <a href="{% url 'telemetry:upload' %}" class="btn btn-primary btn-lg">
+                            <i class="bi bi-upload"></i> Upload Session
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
         {% endif %}

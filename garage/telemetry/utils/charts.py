@@ -1187,3 +1187,81 @@ def create_time_delta_chart(laps):
         'displayModeBar': True,
         'modeBarButtonsToRemove': ['toImage']
     })
+
+
+def create_lap_time_progression_chart(sessions_data):
+    """
+    Create a lap time progression chart showing best lap times over time.
+
+    Args:
+        sessions_data: List of dictionaries with 'session_date', 'best_lap_time', 'track_name', 'car_name'
+
+    Returns:
+        HTML string for embedding in template
+    """
+    if not sessions_data:
+        return None
+
+    # Extract data for plotting
+    dates = [s['session_date'] for s in sessions_data]
+    lap_times = [s['best_lap_time'] for s in sessions_data]
+    tracks = [s['track_name'] for s in sessions_data]
+    cars = [s['car_name'] for s in sessions_data]
+
+    # Format lap times for display (MM:SS.mmm)
+    def format_time(seconds):
+        minutes = int(seconds // 60)
+        secs = seconds % 60
+        return f"{minutes}:{secs:06.3f}"
+
+    # Create hover text
+    hover_text = [
+        f"<b>Date:</b> {date.strftime('%b %d, %Y')}<br>" +
+        f"<b>Track:</b> {track}<br>" +
+        f"<b>Car:</b> {car}<br>" +
+        f"<b>Best Lap:</b> {format_time(time)}"
+        for date, time, track, car in zip(dates, lap_times, tracks, cars)
+    ]
+
+    fig = go.Figure()
+
+    # Add line trace
+    fig.add_trace(go.Scatter(
+        x=dates,
+        y=lap_times,
+        mode='lines+markers',
+        name='Best Lap Time',
+        line=dict(color='#f59e0b', width=3),
+        marker=dict(size=8, color='#dc2626', line=dict(width=2, color='#fff')),
+        hovertext=hover_text,
+        hoverinfo='text'
+    ))
+
+    fig.update_layout(
+        title={
+            'text': 'Lap Time Progression',
+            'font': {'size': 20, 'color': '#fff'}
+        },
+        xaxis_title='Session Date',
+        yaxis_title='Lap Time (seconds)',
+        template='plotly_dark',
+        hovermode='closest',
+        height=400,
+        margin=dict(l=60, r=60, t=60, b=50),
+        plot_bgcolor='rgba(0,0,0,0.3)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(
+            showgrid=True,
+            gridcolor='rgba(255,255,255,0.1)',
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor='rgba(255,255,255,0.1)',
+            tickformat='.3f'
+        )
+    )
+
+    return fig.to_html(div_id='progression-chart', include_plotlyjs=False, config={
+        'displayModeBar': True,
+        'modeBarButtonsToRemove': ['toImage']
+    })

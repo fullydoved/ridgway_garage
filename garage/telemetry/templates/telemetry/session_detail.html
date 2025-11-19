@@ -4,6 +4,40 @@
 {% block title %}{{ session.track.name }} - Session Detail{% endblock %}
 
 {% block content %}
+<!-- Track Header with Background -->
+{% if session.track.background_image_url %}
+<div class="track-header" style="background-image: url('{{ session.track.background_image_url }}');">
+    <div class="track-header-content">
+        <div class="d-flex justify-content-between align-items-start mb-3">
+            <a href="{% url 'telemetry:session_list' %}" class="btn btn-outline-light">
+                <i class="bi bi-arrow-left"></i> Back
+            </a>
+            <form method="post" action="{% url 'telemetry:session_delete' session.pk %}" class="d-inline" onsubmit="return confirm('Delete this session and all laps?');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-outline-danger">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </form>
+        </div>
+        <h1>{% if session.track %}{{ session.track.name }}{% else %}Processing...{% endif %}</h1>
+        <p class="text-muted mb-2">
+            <i class="bi bi-car-front"></i> {% if session.car %}{{ session.car.name }}{% else %}Detecting car...{% endif %}
+            &nbsp;|&nbsp;
+            <i class="bi bi-calendar"></i> {{ session.session_date|date:"M d, Y H:i" }}
+            {% if session.air_temp %}
+            &nbsp;|&nbsp;
+            <span class="{% if session.air_temp < 15 %}temp-cold{% elif session.air_temp < 25 %}temp-moderate{% elif session.air_temp < 35 %}temp-hot{% else %}temp-extreme{% endif %}">
+                <i class="bi bi-thermometer-half"></i> {{ session.air_temp }}°C
+            </span>
+            {% endif %}
+        </p>
+        <span class="badge badge-session-type badge-{{ session.session_type }}">{{ session.get_session_type_display }}</span>
+        {% if session.team %}
+        <span class="badge bg-info"><i class="bi bi-people"></i> {{ session.team.name }}</span>
+        {% endif %}
+    </div>
+</div>
+{% else %}
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-start mb-3">
@@ -19,9 +53,71 @@
         </div>
 
         <h1>{% if session.track %}{{ session.track.name }}{% else %}Processing...{% endif %}</h1>
-        <p class="text-muted">
-            {% if session.car %}{{ session.car.name }}{% else %}Detecting car...{% endif %} | {{ session.session_date|date:"M d, Y H:i" }}
+        <p class="text-muted mb-2">
+            <i class="bi bi-car-front"></i> {% if session.car %}{{ session.car.name }}{% else %}Detecting car...{% endif %}
+            &nbsp;|&nbsp;
+            <i class="bi bi-calendar"></i> {{ session.session_date|date:"M d, Y H:i" }}
+            {% if session.air_temp %}
+            &nbsp;|&nbsp;
+            <span class="{% if session.air_temp < 15 %}temp-cold{% elif session.air_temp < 25 %}temp-moderate{% elif session.air_temp < 35 %}temp-hot{% else %}temp-extreme{% endif %}">
+                <i class="bi bi-thermometer-half"></i> {{ session.air_temp }}°C
+            </span>
+            {% endif %}
         </p>
+        <div class="mb-3">
+            <span class="badge badge-session-type badge-{{ session.session_type }}">{{ session.get_session_type_display }}</span>
+            {% if session.team %}
+            <span class="badge bg-info"><i class="bi bi-people"></i> {{ session.team.name }}</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Session Statistics -->
+{% if session_stats %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card stat-primary">
+            <div class="card-body">
+                <i class="bi bi-speedometer2 stat-icon"></i>
+                <div class="stat-label mb-2">Fastest Lap</div>
+                <div class="stat-value text-warning">{{ session_stats.fastest_time|format_laptime }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stat-success">
+            <div class="card-body">
+                <i class="bi bi-graph-up stat-icon"></i>
+                <div class="stat-label mb-2">Average</div>
+                <div class="stat-value text-success">{{ session_stats.average_time|format_laptime }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stat-info">
+            <div class="card-body">
+                <i class="bi bi-bullseye stat-icon"></i>
+                <div class="stat-label mb-2">Consistency</div>
+                <div class="stat-value text-info">±{{ session_stats.std_dev|floatformat:3 }}s</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card stat-warning">
+            <div class="card-body">
+                <i class="bi bi-flag-fill stat-icon"></i>
+                <div class="stat-label mb-2">Valid Laps</div>
+                <div class="stat-value text-primary">{{ session_stats.valid_laps }}/{{ session_stats.total_laps }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-12">
 
         {% if session.processing_status != 'completed' %}
         <div class="alert alert-warning" id="processing-alert">

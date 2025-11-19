@@ -64,6 +64,69 @@
     </div>
 </div>
 
+<!-- Podium (Top 3) -->
+{% if leaderboard_entries|length >= 3 %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="podium-container">
+                    <!-- Second Place -->
+                    <div class="podium-place second">
+                        <div class="podium-platform">
+                            <div class="podium-rank">2</div>
+                            <div class="podium-driver">
+                                <i class="bi bi-person-circle"></i>
+                                {{ leaderboard_entries.1.driver }}
+                            </div>
+                            <div class="podium-time">{{ leaderboard_entries.1.lap_time|format_laptime }}</div>
+                            <div class="podium-details">
+                                {{ leaderboard_entries.1.track }}<br>
+                                {{ leaderboard_entries.1.car }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- First Place -->
+                    <div class="podium-place first">
+                        <div class="podium-platform">
+                            <div class="podium-rank">
+                                <i class="bi bi-trophy-fill"></i>
+                            </div>
+                            <div class="podium-driver">
+                                <i class="bi bi-person-circle"></i>
+                                {{ leaderboard_entries.0.driver }}
+                            </div>
+                            <div class="podium-time">{{ leaderboard_entries.0.lap_time|format_laptime }}</div>
+                            <div class="podium-details">
+                                {{ leaderboard_entries.0.track }}<br>
+                                {{ leaderboard_entries.0.car }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Third Place -->
+                    <div class="podium-place third">
+                        <div class="podium-platform">
+                            <div class="podium-rank">3</div>
+                            <div class="podium-driver">
+                                <i class="bi bi-person-circle"></i>
+                                {{ leaderboard_entries.2.driver }}
+                            </div>
+                            <div class="podium-time">{{ leaderboard_entries.2.lap_time|format_laptime }}</div>
+                            <div class="podium-details">
+                                {{ leaderboard_entries.2.track }}<br>
+                                {{ leaderboard_entries.2.car }}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Leaderboard Table -->
 <div class="row">
     <div class="col-12">
@@ -87,13 +150,24 @@
                         </thead>
                         <tbody>
                             {% for entry in leaderboard_entries %}
-                            <tr>
+                            <tr {% if entry.driver == user.username %}class="leaderboard-user-row"{% endif %}>
                                 <td>
-                                    <strong class="text-primary">#{{ forloop.counter }}</strong>
+                                    {% if forloop.counter == 1 %}
+                                        <i class="bi bi-trophy-fill text-warning" style="font-size: 1.5rem;"></i>
+                                    {% elif forloop.counter == 2 %}
+                                        <i class="bi bi-award-fill" style="font-size: 1.3rem; color: #c0c0c0;"></i>
+                                    {% elif forloop.counter == 3 %}
+                                        <i class="bi bi-award-fill" style="font-size: 1.1rem; color: #cd7f32;"></i>
+                                    {% else %}
+                                        <strong class="text-primary">#{{ forloop.counter }}</strong>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <i class="bi bi-person-circle"></i>
                                     <strong>{{ entry.driver }}</strong>
+                                    {% if entry.driver == user.username %}
+                                        <span class="badge bg-primary ms-2">You</span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <i class="bi bi-flag"></i>
@@ -120,20 +194,34 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="text-center py-5">
-                    <i class="bi bi-trophy text-muted" style="font-size: 3rem;"></i>
-                    <p class="text-muted mt-3">
+                <div class="empty-state">
+                    <i class="bi bi-trophy empty-state-icon"></i>
+                    <h3 class="empty-state-title">
                         {% if search or selected_track or selected_car %}
-                            No results found for the selected filters.
+                            No Results Found
                         {% else %}
-                            No lap times recorded yet. Upload some sessions to see leaderboards!
+                            No Lap Times Yet
+                        {% endif %}
+                    </h3>
+                    <p class="empty-state-message">
+                        {% if search or selected_track or selected_car %}
+                            No lap times match your current filters. Try broadening your search or upload more sessions.
+                        {% else %}
+                            Start racing and upload your telemetry to compete on the leaderboards!
                         {% endif %}
                     </p>
-                    {% if user.is_authenticated %}
-                        <a href="{% url 'telemetry:upload' %}" class="btn btn-primary">
-                            <i class="bi bi-upload"></i> Upload Telemetry
-                        </a>
-                    {% endif %}
+                    <div class="empty-state-actions">
+                        {% if search or selected_track or selected_car %}
+                            <a href="{% url 'telemetry:leaderboards' %}" class="btn btn-outline-secondary btn-lg">
+                                <i class="bi bi-x-circle"></i> Clear Filters
+                            </a>
+                        {% endif %}
+                        {% if user.is_authenticated %}
+                            <a href="{% url 'telemetry:upload' %}" class="btn btn-primary btn-lg">
+                                <i class="bi bi-upload"></i> Upload Telemetry
+                            </a>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endif %}
             </div>

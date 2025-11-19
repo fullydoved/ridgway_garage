@@ -7,6 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from django.views.decorators.http import require_POST
+from django.db.models import Count
 
 from .models import Session, Lap, TelemetryData, Analysis, Track, Car, Team
 from .forms import SessionUploadForm, AnalysisForm
@@ -255,14 +256,16 @@ def home(request):
                 session__driver=request.user,
                 is_valid=True,
                 lap_time__gt=0  # Exclude laps with 0 or negative lap times
-            ).order_by('lap_time').first(),
+            ).select_related('session', 'session__track', 'session__car').order_by('lap_time').first(),
             'processing': user_sessions.filter(processing_status='processing').count(),
         }
 
-        # Recent sessions (last 5)
+        # Recent sessions (last 5) - exclude sessions with 0 laps
         recent_sessions = user_sessions.select_related(
             'track', 'car', 'team'
-        ).prefetch_related('laps').order_by('-session_date')[:5]
+        ).prefetch_related('laps').annotate(
+            lap_count=Count('laps')
+        ).filter(lap_count__gt=0).order_by('-session_date')[:5]
 
         # Add best lap for each session
         for session in recent_sessions:
@@ -270,17 +273,44 @@ def home(request):
 
         context['recent_sessions'] = recent_sessions
 
+        # Get lap time progression data for chart (last 20 sessions with laps)
+        from .utils.charts import create_lap_time_progression_chart
+        sessions_with_laps = user_sessions.select_related('track', 'car').prefetch_related('laps').annotate(
+            lap_count=Count('laps')
+        ).filter(lap_count__gt=0).order_by('-session_date')[:20]
+
+        progression_data = []
+        for session in sessions_with_laps:
+            best_lap = session.laps.filter(is_valid=True, lap_time__gt=0).order_by('lap_time').first()
+            if best_lap:
+                progression_data.append({
+                    'session_date': session.session_date,
+                    'best_lap_time': float(best_lap.lap_time),
+                    'track_name': session.track.name if session.track else 'Unknown',
+                    'car_name': session.car.name if session.car else 'Unknown',
+                })
+
+        # Reverse to show chronological order (oldest to newest)
+        progression_data.reverse()
+
+        if progression_data:
+            context['progression_chart'] = create_lap_time_progression_chart(progression_data)
+        else:
+            context['progression_chart'] = None
+
     return render(request, 'telemetry/home.html', context)
 
 
 @login_required
 def session_list(request):
     """
-    List all sessions for the logged-in user.
+    List all sessions for the logged-in user (excluding sessions with 0 laps).
     """
     sessions = Session.objects.filter(
         driver=request.user
-    ).select_related('track', 'car', 'team').order_by('-session_date')
+    ).select_related('track', 'car', 'team').annotate(
+        lap_count=Count('laps')
+    ).filter(lap_count__gt=0).order_by('-session_date')
 
     # Filter options
     track_filter = request.GET.get('track')
@@ -378,12 +408,30 @@ def session_detail(request, pk):
         discord_webhook_url__isnull=False
     ).exclude(discord_webhook_url='')
 
+    # Calculate session statistics
+    valid_laps = laps.filter(is_valid=True, lap_time__gt=0)
+    session_stats = None
+    if valid_laps.exists():
+        import statistics
+        lap_times = [float(lap.lap_time) for lap in valid_laps]
+        session_stats = {
+            'total_laps': laps.count(),
+            'valid_laps': valid_laps.count(),
+            'invalid_laps': laps.count() - valid_laps.count(),
+            'fastest_time': min(lap_times),
+            'slowest_time': max(lap_times),
+            'average_time': statistics.mean(lap_times),
+            'median_time': statistics.median(lap_times),
+            'std_dev': statistics.stdev(lap_times) if len(lap_times) > 1 else 0,
+        }
+
     context = {
         'session': session,
         'laps': laps,
-        'best_lap': laps.filter(is_valid=True).order_by('lap_time').first(),
+        'best_lap': laps.filter(is_valid=True, lap_time__gt=0).order_by('lap_time').first(),
         'user_analyses': user_analyses,
         'user_teams_with_discord': user_teams_with_discord,
+        'session_stats': session_stats,
     }
 
     return render(request, 'telemetry/session_detail.html', context)
@@ -1649,6 +1697,15 @@ def api_upload(request):
         ibt_file=uploaded_file,
         processing_status='pending'
     )
+
+    # Try to extract original file modification time from header
+    original_mtime = request.META.get('HTTP_X_ORIGINAL_MTIME')
+    if original_mtime:
+        from django.utils.dateparse import parse_datetime
+        parsed_mtime = parse_datetime(original_mtime)
+        if parsed_mtime:
+            session.session_date = parsed_mtime
+
     session.save()
 
     # Queue Celery task for processing

@@ -144,6 +144,9 @@ class Track(models.Model):
     gps_lng_min = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     gps_lng_max = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
 
+    # Visual assets
+    background_image_url = models.URLField(max_length=500, blank=True, default='', help_text="URL to track background image")
+
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -168,6 +171,9 @@ class Car(models.Model):
     """
     name = models.CharField(max_length=200, unique=True, help_text="Car name (e.g., 'Mazda MX-5 Cup')")
     car_class = models.CharField(max_length=100, blank=True, default='', help_text="Car class (e.g., 'Sports Car')")
+
+    # Visual assets
+    image_url = models.URLField(max_length=500, blank=True, default='', help_text="URL to car image/silhouette")
 
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)

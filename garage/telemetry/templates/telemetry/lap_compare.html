@@ -6,22 +6,71 @@
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1><i class="bi bi-arrows-collapse"></i> Lap Comparison</h1>
-        <p class="text-muted">Comparing {{ laps.count }} laps</p>
-
-        <div class="alert alert-info">
-            <i class="bi bi-info-circle"></i>
-            Lap comparison visualization coming soon!
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1><i class="bi bi-arrows-collapse"></i> Lap Comparison</h1>
+                <p class="text-muted">Quick lap comparison - for advanced analysis, create an Analysis</p>
+            </div>
+            <a href="{% url 'telemetry:session_list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back
+            </a>
         </div>
 
-        <div class="card">
+        <!-- Selected Laps Summary -->
+        <div class="card mb-4">
+            <div class="card-header bg-dark">
+                <h5 class="mb-0"><i class="bi bi-list-check"></i> Selected Laps ({{ laps|length }})</h5>
+            </div>
             <div class="card-body">
-                <h5>Selected Laps:</h5>
-                <ul>
+                <div class="row">
                     {% for lap in laps %}
-                    <li>Lap {{ lap.lap_number }}: {{ lap.lap_time|format_laptime }} ({{ lap.session.track.name }})</li>
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h6 class="card-title">
+                                    <i class="bi bi-flag"></i> Lap {{ lap.lap_number }}
+                                    {% if lap.is_personal_best %}
+                                    <span class="badge bg-warning text-dark ms-1">
+                                        <i class="bi bi-trophy-fill"></i> PB
+                                    </span>
+                                    {% endif %}
+                                </h6>
+                                <p class="card-text">
+                                    <strong>{{ lap.session.track.name }}</strong><br>
+                                    {{ lap.session.car.name }}<br>
+                                    <span class="lap-time fastest" style="font-size: 1.3rem;">{{ lap.lap_time|format_laptime }}</span>
+                                </p>
+                                <div class="d-flex gap-2">
+                                    <a href="{% url 'telemetry:lap_detail' lap.pk %}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                    <a href="{% url 'telemetry:session_detail' lap.session.pk %}" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-folder"></i> Session
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     {% endfor %}
-                </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Call to Action for Analysis -->
+        <div class="card bg-gradient border-primary">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-graph-up" style="font-size: 4rem; color: var(--racing-blue);"></i>
+                <h3 class="mt-3 mb-3">Want Advanced Comparison?</h3>
+                <p class="text-muted mb-4" style="max-width: 600px; margin: 0 auto;">
+                    Create an <strong>Analysis</strong> to compare these laps side-by-side with synchronized telemetry charts,
+                    delta time graphs, and detailed sector analysis.
+                </p>
+                <a href="{% url 'telemetry:analysis_create' %}{% if laps %}?{% for lap in laps %}lap_id={{ lap.pk }}{% if not forloop.last %}&{% endif %}{% endfor %}{% endif %}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-plus-circle"></i> Create Analysis
+                </a>
+                <a href="{% url 'telemetry:analysis_list' %}" class="btn btn-outline-primary btn-lg ms-2">
+                    <i class="bi bi-list"></i> View My Analyses
+                </a>
             </div>
         </div>
     </div>

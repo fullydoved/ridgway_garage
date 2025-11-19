@@ -26,24 +26,27 @@
 <!-- Stats Overview -->
 <div class="row g-4 mb-4">
     <div class="col-md-3">
-        <div class="card stat-card">
+        <div class="card stat-card stat-primary">
             <div class="card-body">
+                <i class="bi bi-collection stat-icon"></i>
                 <div class="stat-label mb-2">Total Sessions</div>
                 <div class="stat-value text-primary">{{ stats.total_sessions|default:0 }}</div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card stat-card">
+        <div class="card stat-card stat-success">
             <div class="card-body">
+                <i class="bi bi-flag stat-icon"></i>
                 <div class="stat-label mb-2">Total Laps</div>
                 <div class="stat-value text-success">{{ stats.total_laps|default:0 }}</div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card stat-card">
+        <div class="card stat-card stat-warning">
             <div class="card-body">
+                <i class="bi bi-trophy stat-icon"></i>
                 <div class="stat-label mb-2">Best Lap</div>
                 <div class="stat-value text-warning">
                     {% if stats.best_lap %}
@@ -52,18 +55,41 @@
                         --
                     {% endif %}
                 </div>
+                {% if stats.best_lap %}
+                <div class="stat-context">
+                    <i class="bi bi-geo-alt-fill"></i> {{ stats.best_lap.session.track.name }}<br>
+                    <i class="bi bi-car-front-fill"></i> {{ stats.best_lap.session.car.name }}
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card stat-card">
+        <div class="card stat-card stat-info">
             <div class="card-body">
+                <i class="bi bi-hourglass-split stat-icon"></i>
                 <div class="stat-label mb-2">Processing</div>
                 <div class="stat-value text-info">{{ stats.processing|default:0 }}</div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Lap Time Progression Chart -->
+{% if progression_chart %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark">
+                <h5 class="mb-0"><i class="bi bi-graph-up"></i> Lap Time Progression</h5>
+            </div>
+            <div class="card-body">
+                {{ progression_chart|safe }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Recent Sessions -->
 <div class="row mb-4">
@@ -97,11 +123,18 @@
                                 <td><strong>{% if session.track %}{{ session.track.name }}{% else %}<span class="text-muted">Detecting...</span>{% endif %}</strong></td>
                                 <td>{% if session.car %}{{ session.car.name }}{% else %}<span class="text-muted">Detecting...</span>{% endif %}</td>
                                 <td>
-                                    <span class="badge badge-session-type bg-secondary">
+                                    <span class="badge badge-session-type badge-{{ session.session_type }}">
                                         {{ session.get_session_type_display }}
                                     </span>
                                 </td>
-                                <td>{{ session.session_date|date:"M d, Y H:i" }}</td>
+                                <td>
+                                    {{ session.session_date|date:"M d, Y H:i" }}
+                                    {% if session.air_temp %}
+                                    <br><small class="{% if session.air_temp < 15 %}temp-cold{% elif session.air_temp < 25 %}temp-moderate{% elif session.air_temp < 35 %}temp-hot{% else %}temp-extreme{% endif %}">
+                                        <i class="bi bi-thermometer-half"></i> {{ session.air_temp }}°C
+                                    </small>
+                                    {% endif %}
+                                </td>
                                 <td>{{ session.laps.count }}</td>
                                 <td>
                                     {% if session.best_lap %}
@@ -132,12 +165,15 @@
                     </table>
                 </div>
                 {% else %}
-                <div class="text-center py-5">
-                    <i class="bi bi-folder-x text-muted" style="font-size: 3rem;"></i>
-                    <p class="text-muted mt-3">No sessions yet. Upload your first telemetry file to get started!</p>
-                    <a href="{% url 'telemetry:upload' %}" class="btn btn-primary">
-                        <i class="bi bi-upload"></i> Upload Now
-                    </a>
+                <div class="empty-state">
+                    <i class="bi bi-folder-x empty-state-icon"></i>
+                    <h3 class="empty-state-title">No Sessions Yet</h3>
+                    <p class="empty-state-message">Ready to improve your lap times? Upload your first telemetry file to see detailed analysis, compare laps, and track your progress.</p>
+                    <div class="empty-state-actions">
+                        <a href="{% url 'telemetry:upload' %}" class="btn btn-primary btn-lg">
+                            <i class="bi bi-upload"></i> Upload Your First Session
+                        </a>
+                    </div>
                 </div>
                 {% endif %}
             </div>
