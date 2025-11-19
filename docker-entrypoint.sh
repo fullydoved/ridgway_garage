@@ -16,10 +16,15 @@ python manage.py collectstatic --noinput --clear
 echo "Creating superuser if needed..."
 python manage.py shell << END
 from django.contrib.auth import get_user_model
+import os
 User = get_user_model()
 if not User.objects.filter(username='admin').exists():
-    User.objects.create_superuser('admin', 'admin@example.com', 'admin')
-    print('Superuser created: username=admin, password=admin')
+    admin_password = os.environ.get('DJANGO_SUPERUSER_PASSWORD', None)
+    if admin_password:
+        User.objects.create_superuser('admin', 'admin@example.com', admin_password)
+        print('Superuser created: username=admin')
+    else:
+        print('WARNING: DJANGO_SUPERUSER_PASSWORD not set - skipping superuser creation')
 else:
     print('Superuser already exists')
 END

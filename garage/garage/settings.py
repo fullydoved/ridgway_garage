@@ -38,11 +38,12 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
-# CSRF Trusted Origins (for non-standard ports)
-CSRF_TRUSTED_ORIGINS = [
-    'http://localhost:42069',
-    'http://127.0.0.1:42069',
-]
+# CSRF Trusted Origins (for non-standard ports and reverse proxies)
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='http://localhost:42069,http://127.0.0.1:42069',
+    cast=lambda v: [s.strip() for s in v.split(',')]
+)
 
 
 # Application definition
