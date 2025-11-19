@@ -1,0 +1,167 @@
+{% extends 'telemetry/base.html' %}
+{% load telemetry_filters %}
+
+{% block title %}Leaderboards - Ridgway Garage{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="mb-2">
+                    <i class="bi bi-trophy text-warning"></i> Leaderboards
+                </h1>
+                <p class="text-muted">Personal best lap times for every track and car combination</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="get" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Search</label>
+                        <input type="text" class="form-control" id="search" name="search"
+                               placeholder="Driver, track, or car..." value="{{ search }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="track" class="form-label">Track</label>
+                        <select class="form-select" id="track" name="track">
+                            <option value="">All Tracks</option>
+                            {% for track in tracks %}
+                                <option value="{{ track.id }}" {% if selected_track == track.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ track.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="car" class="form-label">Car</label>
+                        <select class="form-select" id="car" name="car">
+                            <option value="">All Cars</option>
+                            {% for car in cars %}
+                                <option value="{{ car.id }}" {% if selected_car == car.id|stringformat:"s" %}selected{% endif %}>
+                                    {{ car.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="bi bi-funnel"></i> Filter
+                        </button>
+                        <a href="{% url 'telemetry:leaderboards' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle"></i> Clear
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Leaderboard Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-dark">
+                <h5 class="mb-0"><i class="bi bi-list-ol"></i> Rankings</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if leaderboard_entries %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0" id="leaderboardTable">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Driver</th>
+                                <th>Track</th>
+                                <th>Car</th>
+                                <th>Best Lap</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in leaderboard_entries %}
+                            <tr>
+                                <td>
+                                    <strong class="text-primary">#{{ forloop.counter }}</strong>
+                                </td>
+                                <td>
+                                    <i class="bi bi-person-circle"></i>
+                                    <strong>{{ entry.driver }}</strong>
+                                </td>
+                                <td>
+                                    <i class="bi bi-flag"></i>
+                                    {{ entry.track }}
+                                </td>
+                                <td>
+                                    <i class="bi bi-car-front"></i>
+                                    {{ entry.car }}
+                                </td>
+                                <td>
+                                    <span class="lap-time {% if forloop.counter == 1 %}fastest{% elif forloop.counter == 2 %}second-fastest{% elif forloop.counter == 3 %}third-fastest{% endif %}">
+                                        {{ entry.lap_time|format_laptime }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <a href="{% url 'telemetry:lap_detail' entry.lap.pk %}"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-trophy text-muted" style="font-size: 3rem;"></i>
+                    <p class="text-muted mt-3">
+                        {% if search or selected_track or selected_car %}
+                            No results found for the selected filters.
+                        {% else %}
+                            No lap times recorded yet. Upload some sessions to see leaderboards!
+                        {% endif %}
+                    </p>
+                    {% if user.is_authenticated %}
+                        <a href="{% url 'telemetry:upload' %}" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Upload Telemetry
+                        </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if leaderboard_entries %}
+<div class="row mt-3">
+    <div class="col-12">
+        <p class="text-muted text-center">
+            <i class="bi bi-info-circle"></i>
+            Showing {{ leaderboard_entries|length }} personal best{{ leaderboard_entries|length|pluralize }} time{{ leaderboard_entries|length|pluralize }}
+        </p>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-submit filter form when dropdowns change
+document.getElementById('track').addEventListener('change', function() {
+    this.form.submit();
+});
+document.getElementById('car').addEventListener('change', function() {
+    this.form.submit();
+});
+</script>
+{% endblock %}

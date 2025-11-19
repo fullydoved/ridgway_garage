@@ -43,6 +43,9 @@ urlpatterns = [
     path('teams/<int:pk>/edit/', views.team_edit, name='team_edit'),
     path('teams/<int:pk>/delete/', views.team_delete, name='team_delete'),
 
+    # Leaderboards
+    path('leaderboards/', views.leaderboards, name='leaderboards'),
+
     # System Update (admin only)
     path('system/update/', views.system_update_page, name='system_update'),
     path('system/update/check/', views.system_update_check, name='system_update_check'),
