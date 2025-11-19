@@ -67,6 +67,11 @@ def send_pb_notification(session, lap, is_improvement=False, previous_time=None,
         )
         return False
 
+    # Can't send notification without track and car information
+    if not session.track or not session.car:
+        logger.debug(f"Session {session.id} missing track or car information, skipping PB notification")
+        return False
+
     # Build the Discord message
     try:
         # Format track name

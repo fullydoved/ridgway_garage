@@ -298,6 +298,10 @@ def session_list(request):
     tracks = Track.objects.filter(sessions__driver=request.user).distinct()
     cars = Car.objects.filter(sessions__driver=request.user).distinct()
 
+    # Add best lap for each session
+    for session in sessions:
+        session.best_lap = session.laps.filter(is_valid=True, lap_time__gt=0).order_by('lap_time').first()
+
     context = {
         'sessions': sessions,
         'tracks': tracks,

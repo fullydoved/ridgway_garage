@@ -32,6 +32,11 @@ def update_personal_bests(session):
     track = session.track
     car = session.car
 
+    # Can't track PBs without track and car information
+    if not track or not car:
+        logger.debug(f"Session {session.id} missing track or car information, skipping PB check")
+        return False, None, None
+
     # Get fastest valid lap from this session (exclude lap 0 and invalid laps)
     session_best = session.laps.filter(
         lap_time__gt=0

@@ -93,12 +93,10 @@
                             </div>
                             <div class="col-md-3">
                                 <div class="text-muted small">Laps: {{ session.laps.count }}</div>
-                                {% if session.laps.count > 0 %}
+                                {% if session.best_lap %}
                                 <div>
                                     Best: <span class="lap-time">
-                                        {% with best=session.laps.all|dictsort:"lap_time"|first %}
-                                            {{ best.lap_time|format_laptime }}
-                                        {% endwith %}
+                                        {{ session.best_lap.lap_time|format_laptime }}
                                     </span>
                                 </div>
                                 {% endif %}

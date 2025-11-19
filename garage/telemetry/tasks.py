@@ -101,15 +101,17 @@ def parse_ibt_file(self, session_id):
 
         # Auto-detect track if not specified
         if not session.track and 'WeekendInfo' in session_info:
-            track_name = session_info['WeekendInfo'].get('TrackDisplayName', '').strip()
-            track_config = session_info['WeekendInfo'].get('TrackConfigName', '').strip()
+            track_name = (session_info['WeekendInfo'].get('TrackDisplayName') or '').strip()
+            track_config = (session_info['WeekendInfo'].get('TrackConfigName') or '').strip()
 
             if track_name:
+                track_length = session_info['WeekendInfo'].get('TrackLength') or ''
+                track_length_clean = track_length.replace(' km', '') if track_length else None
                 track, created = Track.objects.get_or_create(
                     name=track_name,
                     configuration=track_config if track_config else '',
                     defaults={
-                        'length_km': session_info['WeekendInfo'].get('TrackLength', '').replace(' km', '') or None
+                        'length_km': track_length_clean
                     }
                 )
                 session.track = track
@@ -123,14 +125,14 @@ def parse_ibt_file(self, session_id):
                 driver_info = drivers[0]
 
                 # Extract driver name
-                driver_name = driver_info.get('UserName', '').strip()
+                driver_name = (driver_info.get('UserName') or '').strip()
                 if driver_name:
                     session.driver_name = driver_name
                     logger.info(f"Extracted driver name: {driver_name}")
 
                 # Extract car info
                 if not session.car:
-                    car_name = driver_info.get('CarScreenName', '').strip()
+                    car_name = (driver_info.get('CarScreenName') or '').strip()
                     if car_name:
                         car_class = driver_info.get('CarClassShortName') or ''
                         car, created = Car.objects.get_or_create(

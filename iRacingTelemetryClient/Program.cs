@@ -443,26 +443,59 @@ public class MainForm : Form
         try
         {
             // Wait for file to be fully written and not locked
-            int retries = 10;
-            while (retries > 0)
+            // iRacing can take 1-2 minutes to finish writing large IBT files (100MB+)
+            int maxRetries = 60;
+            int retries = 0;
+            long previousFileSize = 0;
+            int stableChecks = 0;
+            const int requiredStableChecks = 2; // File size must be stable for 2 checks
+
+            while (retries < maxRetries)
             {
                 try
                 {
-                    using (var fs = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    // Try to open file with ReadWrite share mode to allow iRacing to continue writing
+                    using (var fs = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                     {
-                        break; // File is accessible
+                        long currentFileSize = fs.Length;
+
+                        // Check if file size is stable (hasn't changed since last check)
+                        if (currentFileSize == previousFileSize && previousFileSize > 0)
+                        {
+                            stableChecks++;
+                            if (stableChecks >= requiredStableChecks)
+                            {
+                                LogManager.Log($"File ready for upload: {Path.GetFileName(filePath)} ({currentFileSize / (1024.0 * 1024.0):F2} MB)");
+                                break; // File is accessible and size is stable
+                            }
+                        }
+                        else
+                        {
+                            stableChecks = 0; // Reset stability counter
+                        }
+
+                        previousFileSize = currentFileSize;
                     }
                 }
-                catch (IOException)
+                catch (IOException ex)
                 {
-                    retries--;
                     if (retries == 0)
                     {
-                        LogManager.Log($"File still locked after retries: {Path.GetFileName(filePath)}", "ERROR");
-                        throw;
+                        LogManager.Log($"Waiting for iRacing to finish writing: {Path.GetFileName(filePath)}");
                     }
-                    await Task.Delay(2000);
                 }
+
+                retries++;
+                if (retries >= maxRetries)
+                {
+                    LogManager.Log($"File still being written after {maxRetries} attempts (2 minutes): {Path.GetFileName(filePath)}", "WARNING");
+                    LogManager.Log($"Will retry upload automatically when file system detects changes", "INFO");
+                    return; // Don't throw - exit gracefully
+                }
+
+                // Exponential backoff: start at 1 second, increase to max 5 seconds
+                int delayMs = Math.Min(1000 + (retries * 100), 5000);
+                await Task.Delay(delayMs);
             }
 
             var fileInfo = new FileInfo(filePath);
@@ -593,7 +626,7 @@ public class MainForm : Form
         LogManager.Log("Using default settings");
         return new AppSettings
         {
-            ServerUrl = "http://localhost:8000",
+            ServerUrl = "https://garage.mapleleafmakers.com",
             ApiToken = "",
             TelemetryFolder = ""
         };
@@ -627,7 +660,7 @@ public class MainForm : Form
 
 public class AppSettings
 {
-    public string ServerUrl { get; set; } = "http://localhost:42069";
+    public string ServerUrl { get; set; } = "https://garage.mapleleafmakers.com";
     public string ApiToken { get; set; } = "";
     public string? TelemetryFolder { get; set; }
     public bool AutoUpload { get; set; } = true;
