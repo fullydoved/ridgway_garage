@@ -403,7 +403,7 @@ class Analysis(models.Model):
 
     def fastest_lap(self):
         """Return the fastest lap in this analysis"""
-        return self.laps.filter(is_valid=True).order_by('lap_time').first()
+        return self.laps.filter(is_valid=True, lap_time__gt=0).order_by('lap_time').first()
 
 
 class SystemUpdate(models.Model):

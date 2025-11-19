@@ -253,7 +253,8 @@ def home(request):
             'total_laps': Lap.objects.filter(session__driver=request.user).count(),
             'best_lap': Lap.objects.filter(
                 session__driver=request.user,
-                is_valid=True
+                is_valid=True,
+                lap_time__gt=0  # Exclude laps with 0 or negative lap times
             ).order_by('lap_time').first(),
             'processing': user_sessions.filter(processing_status='processing').count(),
         }
@@ -265,7 +266,7 @@ def home(request):
 
         # Add best lap for each session
         for session in recent_sessions:
-            session.best_lap = session.laps.filter(is_valid=True).order_by('lap_time').first()
+            session.best_lap = session.laps.filter(is_valid=True, lap_time__gt=0).order_by('lap_time').first()
 
         context['recent_sessions'] = recent_sessions
 
@@ -1434,7 +1435,8 @@ def leaderboards(request):
 
     # Get all track/car combinations that have laps
     combinations = Lap.objects.filter(
-        is_valid=True
+        is_valid=True,
+        lap_time__gt=0  # Exclude laps with 0 or negative lap times
     ).values('session__track', 'session__car').annotate(
         lap_count=Count('id')
     ).filter(lap_count__gt=0)
@@ -1457,7 +1459,8 @@ def leaderboards(request):
         best_laps = Lap.objects.filter(
             session__track_id=track_id,
             session__car_id=car_id,
-            is_valid=True
+            is_valid=True,
+            lap_time__gt=0  # Exclude laps with 0 or negative lap times
         ).select_related(
             'session__driver',
             'session__track',
