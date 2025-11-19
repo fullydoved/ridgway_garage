@@ -1590,10 +1590,45 @@ def api_upload(request):
     uploaded_file = request.FILES['file']
 
     # Validate file extension
-    if not uploaded_file.name.lower().endswith('.ibt'):
+    if not uploaded_file.name.lower().endswith('.ibt') and not uploaded_file.name.lower().endswith('.ibt.gz'):
         return JsonResponse({
             'error': 'Only .ibt files are allowed'
         }, status=400)
+
+    # Detect and decompress gzipped files
+    import gzip
+    from django.core.files.uploadedfile import InMemoryUploadedFile
+    from io import BytesIO
+
+    # Check if file is gzipped by reading magic bytes
+    file_start = uploaded_file.read(2)
+    uploaded_file.seek(0)  # Reset to beginning
+
+    if file_start == b'\x1f\x8b':  # Gzip magic number
+        try:
+            # Read and decompress the entire file
+            compressed_data = uploaded_file.read()
+            decompressed_data = gzip.decompress(compressed_data)
+
+            # Create new in-memory file with decompressed data
+            decompressed_file = InMemoryUploadedFile(
+                file=BytesIO(decompressed_data),
+                field_name='file',
+                name=uploaded_file.name.replace('.gz', ''),  # Remove .gz extension if present
+                content_type='application/octet-stream',
+                size=len(decompressed_data),
+                charset=None
+            )
+            uploaded_file = decompressed_file
+
+        except gzip.BadGzipFile:
+            return JsonResponse({
+                'error': 'File appears corrupted - invalid gzip format'
+            }, status=400)
+        except Exception as e:
+            return JsonResponse({
+                'error': f'Decompression error: {str(e)}'
+            }, status=400)
 
     # Validate file size (check against MAX_UPLOAD_SIZE from settings)
     max_size = getattr(settings, 'MAX_UPLOAD_SIZE', 2147483648)  # 2GB default

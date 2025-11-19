@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 
@@ -511,11 +512,24 @@ public class MainForm : Form
             var fileSizeMB = fileInfo.Length / (1024.0 * 1024.0);
             var uploadUrl = settings.ServerUrl.TrimEnd('/') + "/api/upload/";
 
-            LogManager.Log($"Uploading: {Path.GetFileName(filePath)} ({fileSizeMB:F2} MB) to {uploadUrl}");
+            // Compress the file before uploading
+            var compressedStream = new MemoryStream();
+            using (var fileStream = File.OpenRead(filePath))
+            using (var gzipStream = new GZipStream(compressedStream, CompressionMode.Compress, leaveOpen: true))
+            {
+                await fileStream.CopyToAsync(gzipStream);
+            }
+            compressedStream.Position = 0;  // Reset for reading
+
+            var compressedSizeMB = compressedStream.Length / (1024.0 * 1024.0);
+            var compressionRatio = (1 - (compressedStream.Length / (double)fileInfo.Length)) * 100;
+
+            LogManager.Log($"Uploading: {Path.GetFileName(filePath)} " +
+                          $"({fileSizeMB:F2} MB → {compressedSizeMB:F2} MB compressed, " +
+                          $"{compressionRatio:F1}% reduction) to {uploadUrl}");
 
             using var form = new MultipartFormDataContent();
-            using var fileStream = File.OpenRead(filePath);
-            using var fileContent = new StreamContent(fileStream);
+            using var fileContent = new StreamContent(compressedStream);
 
             fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
             form.Add(fileContent, "file", Path.GetFileName(filePath));

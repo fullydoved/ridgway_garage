@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from decimal import Decimal
 
-from .models import Session, Lap, TelemetryData, Track, Car, Team, Analysis
+from .models import Session, Lap, TelemetryData, Track, Car, Team, Analysis, Driver
 
 User = get_user_model()
 
@@ -527,3 +527,141 @@ class AnalysisFormTest(TestCase):
         form = AnalysisForm(data=data, user=self.user)
         self.assertFalse(form.is_valid())
         self.assertIn('name', form.errors)
+
+
+class APIUploadTest(TestCase):
+    """Test API upload endpoint with compression support."""
+
+    def setUp(self):
+        """Set up test user with API token."""
+        self.user = User.objects.create_user(
+            username='testdriver',
+            password='testpass123'
+        )
+
+        self.driver = Driver.objects.create(
+            user=self.user,
+            display_name='Test Driver'
+        )
+
+        # Generate API token
+        self.api_token = self.driver.generate_api_token()
+
+        self.client = Client()
+
+    def test_api_upload_uncompressed_ibt(self):
+        """Test uploading uncompressed IBT file (backward compatibility)."""
+        # Create fake IBT data
+        ibt_data = b"fake ibt content here" * 100
+        test_file = SimpleUploadedFile(
+            "test_session.ibt",
+            ibt_data,
+            content_type="application/octet-stream"
+        )
+
+        # Upload via API
+        response = self.client.post(
+            reverse('telemetry:api_upload'),
+            {'file': test_file},
+            HTTP_AUTHORIZATION=f'Token {self.api_token}'
+        )
+
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertIn('session_id', data)
+
+        # Verify session created
+        session = Session.objects.get(id=data['session_id'])
+        self.assertEqual(session.driver, self.user)
+        self.assertEqual(session.processing_status, 'pending')
+
+        # Verify file saved correctly (uncompressed)
+        with session.ibt_file.open('rb') as f:
+            saved_data = f.read()
+        self.assertEqual(saved_data, ibt_data)
+
+    def test_api_upload_compressed_ibt(self):
+        """Test uploading gzip-compressed IBT file."""
+        import gzip
+
+        # Create fake IBT data
+        original_data = b"fake ibt content here" * 100  # Larger for compression
+
+        # Compress it
+        compressed_data = gzip.compress(original_data)
+
+        test_file = SimpleUploadedFile(
+            "test_session.ibt.gz",
+            compressed_data,
+            content_type="application/octet-stream"
+        )
+
+        # Upload via API
+        response = self.client.post(
+            reverse('telemetry:api_upload'),
+            {'file': test_file},
+            HTTP_AUTHORIZATION=f'Token {self.api_token}'
+        )
+
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertTrue(data['success'])
+        self.assertIn('session_id', data)
+
+        # Verify session created
+        session = Session.objects.get(id=data['session_id'])
+
+        # Verify file was decompressed before saving
+        with session.ibt_file.open('rb') as f:
+            saved_data = f.read()
+        self.assertEqual(saved_data, original_data)  # Should match ORIGINAL
+
+    def test_api_upload_corrupted_gzip(self):
+        """Test that corrupted gzip files are rejected gracefully."""
+        # Create fake gzip header but invalid data
+        corrupted_data = b'\x1f\x8b\x08\x00' + b'invalid data'
+
+        test_file = SimpleUploadedFile(
+            "corrupted.ibt",
+            corrupted_data,
+            content_type="application/octet-stream"
+        )
+
+        response = self.client.post(
+            reverse('telemetry:api_upload'),
+            {'file': test_file},
+            HTTP_AUTHORIZATION=f'Token {self.api_token}'
+        )
+
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertIn('error', data)
+        # Error message should mention decompression failure
+        self.assertIn('decompression', data['error'].lower())
+
+    def test_api_upload_requires_authentication(self):
+        """Test that API upload requires valid token."""
+        ibt_data = b"fake ibt content"
+        test_file = SimpleUploadedFile(
+            "test.ibt",
+            ibt_data,
+            content_type="application/octet-stream"
+        )
+
+        # Try without token
+        response = self.client.post(
+            reverse('telemetry:api_upload'),
+            {'file': test_file}
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+        # Try with invalid token
+        response = self.client.post(
+            reverse('telemetry:api_upload'),
+            {'file': test_file},
+            HTTP_AUTHORIZATION='Token invalid_token_here'
+        )
+
+        self.assertEqual(response.status_code, 401)
