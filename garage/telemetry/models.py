@@ -45,6 +45,10 @@ class Driver(models.Model):
 
     class Meta:
         ordering = ['user__username']
+        indexes = [
+            models.Index(fields=['iracing_id']),  # Frequently queried for driver lookups
+            # Note: api_token already has index via unique=True constraint
+        ]
 
     def __str__(self):
         return self.display_name or self.user.username
@@ -85,6 +89,11 @@ class Team(models.Model):
 
     class Meta:
         ordering = ['name']
+        indexes = [
+            models.Index(fields=['is_public']),  # For filtering public teams
+            models.Index(fields=['owner']),  # For owner's team listings
+            # Note: name already has index via unique=True constraint
+        ]
 
     def __str__(self):
         return self.name
@@ -108,6 +117,11 @@ class TeamMembership(models.Model):
     class Meta:
         unique_together = ['team', 'user']
         ordering = ['team', '-joined_at']
+        indexes = [
+            models.Index(fields=['user', 'role']),  # For querying user's teams by role
+            models.Index(fields=['team', 'role']),  # For querying team members by role
+            # Note: unique_together already creates index on ['team', 'user']
+        ]
 
     def __str__(self):
         return f"{self.user.username} - {self.team.name} ({self.role})"
@@ -137,6 +151,10 @@ class Track(models.Model):
     class Meta:
         ordering = ['name', 'configuration']
         unique_together = ['name', 'configuration']
+        indexes = [
+            # Note: unique_together already creates index on ['name', 'configuration']
+            models.Index(fields=['name']),  # For partial name searches/lookups
+        ]
 
     def __str__(self):
         if self.configuration:
@@ -157,6 +175,10 @@ class Car(models.Model):
 
     class Meta:
         ordering = ['name']
+        indexes = [
+            models.Index(fields=['car_class']),  # For filtering by car class
+            # Note: name already has index via unique=True constraint
+        ]
 
     def __str__(self):
         return self.name
@@ -283,6 +305,8 @@ class Lap(models.Model):
         indexes = [
             models.Index(fields=['session', 'lap_time']),
             models.Index(fields=['is_valid', 'lap_time']),
+            models.Index(fields=['is_personal_best']),  # For querying personal best laps
+            models.Index(fields=['is_valid', 'is_personal_best', 'lap_time']),  # Compound index for PB queries
         ]
 
     def __str__(self):

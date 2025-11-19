@@ -29,10 +29,12 @@ except FileNotFoundError:
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-%d-+gko$59ri(44$lh_k-$!_wt7rj8i9&-55*z5w617j4+^t3j')
+# SECRET_KEY must be set in environment variables - no insecure default
+SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=True, cast=bool)
+# DEBUG defaults to False for security - must explicitly enable for development
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
@@ -297,3 +299,67 @@ MAX_UPLOAD_SIZE = 2147483648  # 2GB in bytes
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Security Headers Configuration
+# https://docs.djangoproject.com/en/5.2/ref/settings/#security
+
+# Browser XSS protection
+SECURE_BROWSER_XSS_FILTER = True
+
+# Prevent MIME type sniffing
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Prevent clickjacking
+X_FRAME_OPTIONS = 'DENY'
+
+# HTTP Strict Transport Security (HSTS)
+# Forces browsers to use HTTPS - only enable in production with SSL
+if not DEBUG:
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_SSL_REDIRECT = True  # Redirect HTTP to HTTPS
+
+# Session Security
+SESSION_COOKIE_AGE = 86400  # 24 hours
+SESSION_SAVE_EVERY_REQUEST = True  # Refresh session on activity
+SESSION_COOKIE_SECURE = not DEBUG  # HTTPS only in production
+SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access
+SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+
+# CSRF Cookie Security
+CSRF_COOKIE_SECURE = not DEBUG  # HTTPS only in production
+CSRF_COOKIE_HTTPONLY = True  # Prevent JavaScript access
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+# Content Security Policy (CSP)
+# Note: Using 'unsafe-inline' for now due to Bootstrap/Plotly inline scripts
+# TODO: Migrate to nonce-based CSP when refactoring frontend
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_SCRIPT_SRC = (
+    "'self'",
+    "'unsafe-inline'",  # Required for Bootstrap and Plotly
+    "https://cdn.jsdelivr.net",  # CDN for Bootstrap/Leaflet
+    "https://cdn.plot.ly",  # Plotly.js
+)
+CSP_STYLE_SRC = (
+    "'self'",
+    "'unsafe-inline'",  # Required for Bootstrap
+    "https://cdn.jsdelivr.net",
+)
+CSP_IMG_SRC = (
+    "'self'",
+    "data:",  # For inline images in charts
+    "https://*.openstreetmap.org",  # OSM tiles for Leaflet
+    "https://*.tile.openstreetmap.org",
+)
+CSP_FONT_SRC = (
+    "'self'",
+    "data:",
+    "https://cdn.jsdelivr.net",
+)
+CSP_CONNECT_SRC = (
+    "'self'",
+    "ws://localhost:8000" if DEBUG else "",  # WebSocket in development
+    "wss://*" if not DEBUG else "",  # WebSocket in production
+)

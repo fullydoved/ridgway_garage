@@ -12,6 +12,229 @@ from .models import Session, Lap, TelemetryData, Analysis, Track, Car, Team
 from .forms import SessionUploadForm, AnalysisForm
 
 
+# ============================================================================
+# Helper Functions & Decorators
+# ============================================================================
+
+def api_token_required(view_func):
+    """
+    Decorator for API views that require token authentication.
+
+    Validates the Authorization header contains a valid API token and
+    sets request.user to the authenticated user.
+
+    Usage:
+        @api_token_required
+        def my_api_view(request):
+            # request.user is now the authenticated user
+            ...
+
+    Returns 401 JSON response if authentication fails.
+    """
+    from functools import wraps
+    from django.http import JsonResponse
+    from .models import Driver
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        # Check for token in Authorization header
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+
+        if not auth_header.startswith('Token '):
+            return JsonResponse({
+                'error': 'Missing or invalid Authorization header'
+            }, status=401)
+
+        token_key = auth_header.replace('Token ', '').strip()
+
+        # Validate token format (UUIDs are at least 32 chars)
+        if not token_key or len(token_key) < 32:
+            return JsonResponse({
+                'error': 'Invalid token format'
+            }, status=401)
+
+        # Find driver by API token
+        try:
+            driver_profile = Driver.objects.select_related('user').get(api_token=token_key)
+            # Set the authenticated user on the request
+            request.user = driver_profile.user
+        except Driver.DoesNotExist:
+            return JsonResponse({
+                'error': 'Invalid API token'
+            }, status=401)
+
+        # Call the original view function
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
+
+
+def build_lap_export_data(lap, telemetry):
+    """
+    Build standardized export data structure for a lap with telemetry.
+
+    Args:
+        lap: Lap model instance
+        telemetry: TelemetryData model instance
+
+    Returns:
+        dict: Export data structure with lap, session, driver, and telemetry data
+    """
+    from datetime import datetime
+
+    export_data = {
+        'format_version': '1.0',
+        'exported_at': datetime.utcnow().isoformat() + 'Z',
+        'lap': {
+            'lap_number': lap.lap_number,
+            'lap_time': float(lap.lap_time),
+            'sector1_time': float(lap.sector1_time) if lap.sector1_time else None,
+            'sector2_time': float(lap.sector2_time) if lap.sector2_time else None,
+            'sector3_time': float(lap.sector3_time) if lap.sector3_time else None,
+            'is_valid': lap.is_valid,
+        },
+        'session': {
+            'track_name': lap.session.track.name if lap.session.track else 'Unknown Track',
+            'track_config': lap.session.track.configuration if lap.session.track else '',
+            'car_name': lap.session.car.name if lap.session.car else 'Unknown Car',
+            'session_type': lap.session.session_type,
+            'session_date': lap.session.session_date.isoformat(),
+            'air_temp': float(lap.session.air_temp) if lap.session.air_temp else None,
+            'track_temp': float(lap.session.track_temp) if lap.session.track_temp else None,
+            'weather_type': lap.session.weather_type or '',
+        },
+        'driver': {
+            'display_name': lap.session.driver_name or lap.session.driver.username,
+        },
+        'telemetry': {
+            'sample_count': telemetry.sample_count,
+            'max_speed': float(telemetry.max_speed) if telemetry.max_speed else None,
+            'avg_speed': float(telemetry.avg_speed) if telemetry.avg_speed else None,
+            'data': telemetry.data,
+        }
+    }
+
+    return export_data
+
+
+def compress_lap_export_data(export_data):
+    """
+    Convert export data to JSON and compress with gzip.
+
+    Args:
+        export_data: Dictionary containing lap export data
+
+    Returns:
+        bytes: Gzip-compressed JSON data
+    """
+    import json
+    import gzip
+
+    json_data = json.dumps(export_data, indent=2)
+    compressed_data = gzip.compress(json_data.encode('utf-8'))
+
+    return compressed_data
+
+
+def import_lap_from_data(data, user):
+    """
+    Import a lap from parsed export data structure.
+
+    Creates Session, Lap, and TelemetryData objects from the standardized
+    export format. Used by both file upload and protocol import.
+
+    Args:
+        data: Dictionary containing lap export data (format_version 1.0)
+        user: Django User who is importing the lap
+
+    Returns:
+        Lap: The created Lap object
+
+    Raises:
+        ValueError: If data format is invalid or missing required fields
+    """
+    from django.utils.dateparse import parse_datetime
+    from django.utils import timezone
+    from decimal import Decimal
+
+    # Validate format version
+    if data.get('format_version') != '1.0':
+        raise ValueError(f"Unsupported format version: {data.get('format_version')}")
+
+    # Validate required fields
+    required_fields = ['lap', 'session', 'driver', 'telemetry']
+    for field in required_fields:
+        if field not in data:
+            raise ValueError(f"Invalid data format: missing '{field}' field")
+
+    # Get or create Track
+    track_name = data['session'].get('track_name', 'Unknown Track')
+    track_config = data['session'].get('track_config', '')
+    track, _ = Track.objects.get_or_create(
+        name=track_name,
+        configuration=track_config,
+        defaults={'name': track_name, 'configuration': track_config}
+    )
+
+    # Get or create Car
+    car_name = data['session'].get('car_name', 'Unknown Car')
+    car, _ = Car.objects.get_or_create(
+        name=car_name,
+        defaults={'name': car_name}
+    )
+
+    # Parse session date
+    try:
+        session_date = parse_datetime(data['session']['session_date'])
+        if not session_date:
+            session_date = timezone.now()
+    except:
+        session_date = timezone.now()
+
+    # Create Session
+    session = Session.objects.create(
+        driver=user,
+        team=user.driver_profile.default_team if hasattr(user, 'driver_profile') else None,
+        track=track,
+        car=car,
+        session_type='imported',
+        session_date=session_date,
+        processing_status='completed',
+        air_temp=Decimal(str(data['session']['air_temp'])) if data['session'].get('air_temp') is not None else None,
+        track_temp=Decimal(str(data['session']['track_temp'])) if data['session'].get('track_temp') is not None else None,
+        weather_type=data['session'].get('weather_type', ''),
+        is_public=False,
+    )
+
+    # Create Lap
+    lap_data = data['lap']
+    lap = Lap.objects.create(
+        session=session,
+        lap_number=lap_data.get('lap_number', 1),
+        lap_time=Decimal(str(lap_data['lap_time'])),
+        sector1_time=Decimal(str(lap_data['sector1_time'])) if lap_data.get('sector1_time') is not None else None,
+        sector2_time=Decimal(str(lap_data['sector2_time'])) if lap_data.get('sector2_time') is not None else None,
+        sector3_time=Decimal(str(lap_data['sector3_time'])) if lap_data.get('sector3_time') is not None else None,
+        is_valid=lap_data.get('is_valid', True),
+    )
+
+    # Create TelemetryData
+    telemetry_data = data['telemetry']
+    TelemetryData.objects.create(
+        lap=lap,
+        data=telemetry_data['data'],
+        sample_count=telemetry_data.get('sample_count', len(telemetry_data['data'].get('Distance', []))),
+        max_speed=Decimal(str(telemetry_data['max_speed'])) if telemetry_data.get('max_speed') is not None else None,
+        avg_speed=Decimal(str(telemetry_data['avg_speed'])) if telemetry_data.get('avg_speed') is not None else None,
+    )
+
+    return lap
+
+
+# ============================================================================
+# Views
+# ============================================================================
+
 def home(request):
     """
     Home/Dashboard view showing stats and recent sessions.
@@ -90,7 +313,12 @@ def session_list(request):
 def session_detail(request, pk):
     """
     Detail view for a single session showing all laps.
+
+    Performance: Uses prefetch_related with Prefetch objects to avoid N+1 queries
+    when checking which analyses contain each lap.
     """
+    from django.db.models import Prefetch
+
     session = get_object_or_404(
         Session.objects.select_related('track', 'car', 'driver', 'team'),
         pk=pk
@@ -102,21 +330,35 @@ def session_detail(request, pk):
         messages.error(request, "You don't have permission to view this session.")
         return redirect('telemetry:session_list')
 
-    laps = session.laps.all().order_by('lap_number').prefetch_related('analyses')
+    # Prefetch analyses for each lap, filtered by current user
+    # This prevents N+1 queries by fetching all related analyses in one query
+    laps = session.laps.all().order_by('lap_number').prefetch_related(
+        Prefetch(
+            'analyses',
+            queryset=Analysis.objects.filter(driver=request.user),
+            to_attr='user_analyses'
+        ),
+        Prefetch(
+            'analyses',
+            queryset=Analysis.objects.all(),
+            to_attr='all_analyses'
+        )
+    )
 
     # Get user's analyses for the "Add to Analysis" dropdown
     user_analyses = Analysis.objects.filter(driver=request.user).order_by('-updated_at')
 
-    # For each lap, get the analyses it belongs to and annotate user_analyses
-    for lap in laps:
-        lap.user_analyses = lap.analyses.filter(driver=request.user)
+    # Convert to list for multiple iteration
+    user_analyses_list = list(user_analyses)
 
-        # Get IDs of analyses this lap is already in
-        lap_analysis_ids = set(lap.analyses.values_list('id', flat=True))
+    # For each lap, annotate user analyses with whether they contain this lap
+    for lap in laps:
+        # Get IDs of analyses this lap is already in (uses prefetched data)
+        lap_analysis_ids = {analysis.id for analysis in lap.all_analyses}
 
         # Annotate each user analysis with whether it contains this lap
         lap.analyses_with_flag = []
-        for analysis in user_analyses:
+        for analysis in user_analyses_list:
             analysis_copy = type('obj', (object,), {
                 'id': analysis.id,
                 'pk': analysis.pk,
@@ -624,10 +866,7 @@ def lap_export(request, pk):
     Export a lap as a compressed JSON file (.lap.gz).
     Includes lap data, session metadata, and full telemetry.
     """
-    import gzip
-    import json
     from django.http import HttpResponse
-    from datetime import datetime
 
     lap = get_object_or_404(
         Lap.objects.select_related(
@@ -648,44 +887,11 @@ def lap_export(request, pk):
         messages.error(request, "No telemetry data available for this lap.")
         return redirect('telemetry:lap_detail', pk=pk)
 
-    # Build export data structure
-    export_data = {
-        'format_version': '1.0',
-        'exported_at': datetime.utcnow().isoformat() + 'Z',
-        'lap': {
-            'lap_number': lap.lap_number,
-            'lap_time': float(lap.lap_time),
-            'sector1_time': float(lap.sector1_time) if lap.sector1_time else None,
-            'sector2_time': float(lap.sector2_time) if lap.sector2_time else None,
-            'sector3_time': float(lap.sector3_time) if lap.sector3_time else None,
-            'is_valid': lap.is_valid,
-        },
-        'session': {
-            'track_name': lap.session.track.name if lap.session.track else 'Unknown Track',
-            'track_config': lap.session.track.configuration if lap.session.track else '',
-            'car_name': lap.session.car.name if lap.session.car else 'Unknown Car',
-            'session_type': lap.session.session_type,
-            'session_date': lap.session.session_date.isoformat(),
-            'air_temp': float(lap.session.air_temp) if lap.session.air_temp else None,
-            'track_temp': float(lap.session.track_temp) if lap.session.track_temp else None,
-            'weather_type': lap.session.weather_type or '',
-        },
-        'driver': {
-            'display_name': lap.session.driver_name or lap.session.driver.username,
-        },
-        'telemetry': {
-            'sample_count': telemetry.sample_count,
-            'max_speed': float(telemetry.max_speed) if telemetry.max_speed else None,
-            'avg_speed': float(telemetry.avg_speed) if telemetry.avg_speed else None,
-            'data': telemetry.data,
-        }
-    }
+    # Build export data structure using helper function
+    export_data = build_lap_export_data(lap, telemetry)
 
-    # Convert to JSON
-    json_data = json.dumps(export_data, indent=2)
-
-    # Compress with gzip
-    compressed_data = gzip.compress(json_data.encode('utf-8'))
+    # Compress using helper function
+    compressed_data = compress_lap_export_data(export_data)
 
     # Generate filename
     track_name = (lap.session.track.name if lap.session.track else 'Unknown').replace(' ', '_')
@@ -735,80 +941,12 @@ def lap_import(request):
             json_data = gzip.decompress(compressed_data).decode('utf-8')
             data = json.loads(json_data)
 
-            # Validate format version
-            if data.get('format_version') != '1.0':
-                messages.error(request, f"Unsupported format version: {data.get('format_version')}")
-                return redirect('telemetry:lap_import')
+            # Import lap using helper function
+            lap = import_lap_from_data(data, request.user)
 
-            # Validate required fields
-            required_fields = ['lap', 'session', 'driver', 'telemetry']
-            for field in required_fields:
-                if field not in data:
-                    messages.error(request, f"Invalid file format: missing '{field}' field.")
-                    return redirect('telemetry:lap_import')
-
-            # Get or create Track
+            # Get metadata for success message
             track_name = data['session'].get('track_name', 'Unknown Track')
-            track_config = data['session'].get('track_config', '')
-            track, _ = Track.objects.get_or_create(
-                name=track_name,
-                configuration=track_config,
-                defaults={'name': track_name, 'configuration': track_config}
-            )
-
-            # Get or create Car
             car_name = data['session'].get('car_name', 'Unknown Car')
-            car, _ = Car.objects.get_or_create(
-                name=car_name,
-                defaults={'name': car_name}
-            )
-
-            # Parse session date
-            try:
-                session_date = parse_datetime(data['session']['session_date'])
-                if not session_date:
-                    session_date = timezone.now()
-            except:
-                session_date = timezone.now()
-
-            # Create Session
-            session = Session.objects.create(
-                driver=request.user,
-                team=request.user.driver_profile.default_team if hasattr(request.user, 'driver_profile') else None,
-                track=track,
-                car=car,
-                session_type='imported',
-                session_date=session_date,
-                processing_status='completed',
-                air_temp=Decimal(str(data['session']['air_temp'])) if data['session'].get('air_temp') is not None else None,
-                track_temp=Decimal(str(data['session']['track_temp'])) if data['session'].get('track_temp') is not None else None,
-                weather_type=data['session'].get('weather_type', ''),
-                is_public=False,
-            )
-
-            # Create Lap
-            lap_data = data['lap']
-            lap = Lap.objects.create(
-                session=session,
-                lap_number=lap_data.get('lap_number', 1),
-                lap_time=Decimal(str(lap_data['lap_time'])),
-                sector1_time=Decimal(str(lap_data['sector1_time'])) if lap_data.get('sector1_time') is not None else None,
-                sector2_time=Decimal(str(lap_data['sector2_time'])) if lap_data.get('sector2_time') is not None else None,
-                sector3_time=Decimal(str(lap_data['sector3_time'])) if lap_data.get('sector3_time') is not None else None,
-                is_valid=lap_data.get('is_valid', True),
-            )
-
-            # Create TelemetryData
-            telemetry_data = data['telemetry']
-            TelemetryData.objects.create(
-                lap=lap,
-                data=telemetry_data['data'],
-                sample_count=telemetry_data.get('sample_count', len(telemetry_data['data'].get('Distance', []))),
-                max_speed=Decimal(str(telemetry_data['max_speed'])) if telemetry_data.get('max_speed') is not None else None,
-                avg_speed=Decimal(str(telemetry_data['avg_speed'])) if telemetry_data.get('avg_speed') is not None else None,
-            )
-
-            # Get driver display name from imported data
             imported_driver_name = data['driver'].get('display_name', 'Unknown Driver')
 
             messages.success(
@@ -846,11 +984,8 @@ def lap_share_to_discord(request, pk, team_id):
     Share a lap to team's Discord channel via webhook.
     Uploads .lap.gz file and posts formatted message with import links.
     """
-    import gzip
-    import json
     import base64
     import requests
-    from datetime import datetime
     from django.conf import settings
 
     lap = get_object_or_404(
@@ -885,42 +1020,11 @@ def lap_share_to_discord(request, pk, team_id):
         messages.error(request, "No telemetry data available for this lap.")
         return redirect('telemetry:lap_detail', pk=pk)
 
-    # Build export data (same as export view)
-    export_data = {
-        'format_version': '1.0',
-        'exported_at': datetime.utcnow().isoformat() + 'Z',
-        'lap': {
-            'lap_number': lap.lap_number,
-            'lap_time': float(lap.lap_time),
-            'sector1_time': float(lap.sector1_time) if lap.sector1_time else None,
-            'sector2_time': float(lap.sector2_time) if lap.sector2_time else None,
-            'sector3_time': float(lap.sector3_time) if lap.sector3_time else None,
-            'is_valid': lap.is_valid,
-        },
-        'session': {
-            'track_name': lap.session.track.name if lap.session.track else 'Unknown Track',
-            'track_config': lap.session.track.configuration if lap.session.track else '',
-            'car_name': lap.session.car.name if lap.session.car else 'Unknown Car',
-            'session_type': lap.session.session_type,
-            'session_date': lap.session.session_date.isoformat(),
-            'air_temp': float(lap.session.air_temp) if lap.session.air_temp else None,
-            'track_temp': float(lap.session.track_temp) if lap.session.track_temp else None,
-            'weather_type': lap.session.weather_type or '',
-        },
-        'driver': {
-            'display_name': lap.session.driver_name or lap.session.driver.username,
-        },
-        'telemetry': {
-            'sample_count': telemetry.sample_count,
-            'max_speed': float(telemetry.max_speed) if telemetry.max_speed else None,
-            'avg_speed': float(telemetry.avg_speed) if telemetry.avg_speed else None,
-            'data': telemetry.data,
-        }
-    }
+    # Build export data using helper function
+    export_data = build_lap_export_data(lap, telemetry)
 
-    # Convert to JSON and compress
-    json_data = json.dumps(export_data, indent=2)
-    compressed_data = gzip.compress(json_data.encode('utf-8'))
+    # Compress using helper function
+    compressed_data = compress_lap_export_data(export_data)
 
     # Generate filename
     track_name = (lap.session.track.name if lap.session.track else 'Unknown').replace(' ', '_')
@@ -1014,80 +1118,12 @@ def protocol_import(request, base64_data):
         json_data = base64.urlsafe_b64decode(base64_data.encode('utf-8')).decode('utf-8')
         data = json.loads(json_data)
 
-        # Validate format version
-        if data.get('format_version') != '1.0':
-            messages.error(request, f"Unsupported format version: {data.get('format_version')}")
-            return redirect('telemetry:lap_import')
+        # Import lap using helper function
+        lap = import_lap_from_data(data, request.user)
 
-        # Validate required fields
-        required_fields = ['lap', 'session', 'driver', 'telemetry']
-        for field in required_fields:
-            if field not in data:
-                messages.error(request, f"Invalid data format: missing '{field}' field.")
-                return redirect('telemetry:lap_import')
-
-        # Get or create Track
+        # Get metadata for success message
         track_name = data['session'].get('track_name', 'Unknown Track')
-        track_config = data['session'].get('track_config', '')
-        track, _ = Track.objects.get_or_create(
-            name=track_name,
-            configuration=track_config,
-            defaults={'name': track_name, 'configuration': track_config}
-        )
-
-        # Get or create Car
         car_name = data['session'].get('car_name', 'Unknown Car')
-        car, _ = Car.objects.get_or_create(
-            name=car_name,
-            defaults={'name': car_name}
-        )
-
-        # Parse session date
-        try:
-            session_date = parse_datetime(data['session']['session_date'])
-            if not session_date:
-                session_date = timezone.now()
-        except:
-            session_date = timezone.now()
-
-        # Create Session
-        session = Session.objects.create(
-            driver=request.user,
-            team=request.user.driver_profile.default_team if hasattr(request.user, 'driver_profile') else None,
-            track=track,
-            car=car,
-            session_type='imported',
-            session_date=session_date,
-            processing_status='completed',
-            air_temp=Decimal(str(data['session']['air_temp'])) if data['session'].get('air_temp') is not None else None,
-            track_temp=Decimal(str(data['session']['track_temp'])) if data['session'].get('track_temp') is not None else None,
-            weather_type=data['session'].get('weather_type', ''),
-            is_public=False,
-        )
-
-        # Create Lap
-        lap_data = data['lap']
-        lap = Lap.objects.create(
-            session=session,
-            lap_number=lap_data.get('lap_number', 1),
-            lap_time=Decimal(str(lap_data['lap_time'])),
-            sector1_time=Decimal(str(lap_data['sector1_time'])) if lap_data.get('sector1_time') is not None else None,
-            sector2_time=Decimal(str(lap_data['sector2_time'])) if lap_data.get('sector2_time') is not None else None,
-            sector3_time=Decimal(str(lap_data['sector3_time'])) if lap_data.get('sector3_time') is not None else None,
-            is_valid=lap_data.get('is_valid', True),
-        )
-
-        # Create TelemetryData
-        telemetry_data = data['telemetry']
-        TelemetryData.objects.create(
-            lap=lap,
-            data=telemetry_data['data'],
-            sample_count=telemetry_data.get('sample_count', len(telemetry_data['data'].get('Distance', []))),
-            max_speed=Decimal(str(telemetry_data['max_speed'])) if telemetry_data.get('max_speed') is not None else None,
-            avg_speed=Decimal(str(telemetry_data['avg_speed'])) if telemetry_data.get('avg_speed') is not None else None,
-        )
-
-        # Get driver display name from imported data
         imported_driver_name = data['driver'].get('display_name', 'Unknown Driver')
 
         messages.success(
@@ -1444,53 +1480,45 @@ def live_session_detail(request, pk):
     return render(request, 'telemetry/live_session_detail.html', context)
 
 
+@api_token_required
 def api_auth_test(request):
     """
     API endpoint to test authentication.
     Returns basic user info if authenticated with valid API token.
+
+    Requires: Authorization: Token <api_token> header
     """
     from django.http import JsonResponse
-    from .models import Driver
 
-    # Check for token in Authorization header
-    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-
-    if not auth_header.startswith('Token '):
-        return JsonResponse({
-            'authenticated': False,
-            'error': 'Missing or invalid Authorization header'
-        }, status=401)
-
-    token_key = auth_header.replace('Token ', '').strip()
-
-    # Find driver by API token
-    try:
-        driver_profile = Driver.objects.select_related('user').get(api_token=token_key)
-        driver = driver_profile.user
-
-        return JsonResponse({
-            'authenticated': True,
-            'username': driver.username,
-            'email': driver.email,
-            'sessions_count': Session.objects.filter(driver=driver).count(),
-            'server_url': f"{request.scheme}://{request.get_host()}"
-        })
-    except Driver.DoesNotExist:
-        return JsonResponse({
-            'authenticated': False,
-            'error': 'Invalid API token'
-        }, status=401)
+    # Authentication handled by @api_token_required decorator
+    # request.user is the authenticated user
+    return JsonResponse({
+        'authenticated': True,
+        'username': request.user.username,
+        'email': request.user.email,
+        'sessions_count': Session.objects.filter(driver=request.user).count(),
+        'server_url': f"{request.scheme}://{request.get_host()}"
+    })
 
 
 from django.views.decorators.csrf import csrf_exempt
 
 @csrf_exempt
+@api_token_required
 def api_upload(request):
     """
     API endpoint for uploading telemetry files with API token authentication.
+
+    Security Notes:
+    - CSRF exempt because this is a token-authenticated API endpoint
+    - Authentication handled by @api_token_required decorator
+    - TODO: Add rate limiting to prevent abuse (use django-ratelimit)
+    - File validation includes extension and size checks
+
+    Requires: Authorization: Token <api_token> header
     """
     from django.http import JsonResponse
-    from .models import Driver
+    from django.conf import settings
 
     # Only accept POST
     if request.method != 'POST':
@@ -1498,24 +1526,8 @@ def api_upload(request):
             'error': 'Only POST method is allowed'
         }, status=405)
 
-    # Check for token in Authorization header
-    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-
-    if not auth_header.startswith('Token '):
-        return JsonResponse({
-            'error': 'Missing or invalid Authorization header'
-        }, status=401)
-
-    token_key = auth_header.replace('Token ', '').strip()
-
-    # Find driver by API token
-    try:
-        driver_profile = Driver.objects.select_related('user').get(api_token=token_key)
-        driver = driver_profile.user
-    except Driver.DoesNotExist:
-        return JsonResponse({
-            'error': 'Invalid API token'
-        }, status=401)
+    # Authentication handled by @api_token_required decorator
+    # request.user is the authenticated user
 
     # Check if file was uploaded
     if 'file' not in request.FILES:
@@ -1525,9 +1537,28 @@ def api_upload(request):
 
     uploaded_file = request.FILES['file']
 
+    # Validate file extension
+    if not uploaded_file.name.lower().endswith('.ibt'):
+        return JsonResponse({
+            'error': 'Only .ibt files are allowed'
+        }, status=400)
+
+    # Validate file size (check against MAX_UPLOAD_SIZE from settings)
+    max_size = getattr(settings, 'MAX_UPLOAD_SIZE', 2147483648)  # 2GB default
+    if uploaded_file.size > max_size:
+        return JsonResponse({
+            'error': f'File size exceeds maximum allowed size ({max_size / (1024**3):.1f} GB)'
+        }, status=400)
+
+    # Validate minimum file size (IBT files are typically > 1KB)
+    if uploaded_file.size < 1024:
+        return JsonResponse({
+            'error': 'File appears to be too small to be a valid IBT file'
+        }, status=400)
+
     # Create session
     session = Session(
-        driver=driver,
+        driver=request.user,
         ibt_file=uploaded_file,
         processing_status='pending'
     )

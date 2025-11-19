@@ -11,6 +11,7 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <UseWindowsForms>true</UseWindowsForms>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ApplicationIcon>app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>

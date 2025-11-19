@@ -13,6 +13,7 @@ A comprehensive web application for analyzing iRacing telemetry data, comparing 
 - 🔐 **Authentication** - Secure login with Discord OAuth integration
 - 📦 **Large File Support** - Upload IBT files up to 2GB (handles Nurburgring endurance sessions)
 - 🔄 **Auto-Update System** - One-click system updates with automatic backup and rollback (admin only)
+- 🛡️ **Security Hardened** - HTTPS enforcement, security headers, CSRF/XSS protection, and session management
 
 ## Tech Stack
 
@@ -70,9 +71,11 @@ This is the easiest way to get Ridgway Garage running on your machine.
    copy .env.example .env
    ```
 
-3. **Generate a secret key**
+3. **Generate a secret key (REQUIRED)**
 
    Open `.env` in a text editor (Notepad, VS Code, etc.) and replace the `SECRET_KEY` value.
+
+   **⚠️ IMPORTANT**: `SECRET_KEY` is required and has no default value for security reasons. The application will not start without it.
 
    **In Git Bash or PowerShell:**
    ```bash
@@ -203,18 +206,22 @@ If you prefer not to use Docker, you can install manually.
    Edit `.env` in a text editor and update:
    ```
    SECRET_KEY=your-generated-secret-key
+   DEBUG=True
    DB_NAME=ridgway_garage
    DB_USER=postgres
    DB_PASSWORD=your_postgres_password
    DB_HOST=localhost
    DB_PORT=5432
    REDIS_URL=redis://localhost:6379/0
+   WS_ALLOWED_ORIGINS=localhost,127.0.0.1
    ```
 
-   Generate a secret key:
+   **⚠️ IMPORTANT**: Generate a secret key (REQUIRED):
    ```bash
    python -c "import secrets; print(secrets.token_urlsafe(50))"
    ```
+
+   **Note**: For development, set `DEBUG=True`. In production, always use `DEBUG=False`.
 
 8. **Create database**
    Open pgAdmin or psql and create the database:
@@ -377,18 +384,26 @@ This means you can run Ridgway Garage alongside your system PostgreSQL/Redis wit
 
 Key environment variables in `.env`:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SECRET_KEY` | Django secret key (required) | - |
-| `DEBUG` | Debug mode (True/False) | `True` |
-| `ALLOWED_HOSTS` | Comma-separated allowed hosts | `localhost,127.0.0.1` |
-| `DB_NAME` | PostgreSQL database name | `ridgway_garage` |
-| `DB_USER` | PostgreSQL username | `postgres` |
-| `DB_PASSWORD` | PostgreSQL password | `postgres` |
-| `DB_HOST` | PostgreSQL host | `db` (Docker) / `localhost` |
-| `REDIS_URL` | Redis connection URL | `redis://redis:6379/0` |
-| `DISCORD_CLIENT_ID` | Discord OAuth client ID (optional) | - |
-| `DISCORD_CLIENT_SECRET` | Discord OAuth secret (optional) | - |
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `SECRET_KEY` | Django secret key for cryptographic signing | **None** | ✅ **YES** |
+| `DEBUG` | Debug mode (True/False) | `False` | No |
+| `ALLOWED_HOSTS` | Comma-separated allowed hosts | `localhost,127.0.0.1` | No |
+| `WS_ALLOWED_ORIGINS` | WebSocket allowed origins (comma-separated) | `localhost,127.0.0.1` | No |
+| `DB_NAME` | PostgreSQL database name | `ridgway_garage` | No |
+| `DB_USER` | PostgreSQL username | `postgres` | No |
+| `DB_PASSWORD` | PostgreSQL password | `postgres` | No |
+| `DB_HOST` | PostgreSQL host | `db` (Docker) / `localhost` | No |
+| `REDIS_URL` | Redis connection URL | `redis://redis:6379/0` | No |
+| `DISCORD_CLIENT_ID` | Discord OAuth client ID (optional) | - | No |
+| `DISCORD_CLIENT_SECRET` | Discord OAuth secret (optional) | - | No |
+
+**Security Notes:**
+- 🔒 **`SECRET_KEY` is required** - The application will fail to start without it for security reasons
+- 🛡️ **`DEBUG` defaults to `False`** - Explicitly set `DEBUG=True` for development
+- 🌐 **`WS_ALLOWED_ORIGINS`** - Controls which origins can establish WebSocket connections for live telemetry
+- ⏱️ **Session timeout** - Sessions expire after 24 hours of inactivity and refresh on each request
+- 🔐 **Security headers** - Automatic HSTS, CSP, XSS protection, and clickjacking prevention in production
 
 ---
 
@@ -579,16 +594,78 @@ redis:
 
 For production deployment, you should:
 
-1. Set `DEBUG=False` in `.env`
-2. Generate a strong `SECRET_KEY`
+1. Set `DEBUG=False` in `.env` (default is already False)
+2. Generate a strong `SECRET_KEY` using `secrets.token_urlsafe(50)`
 3. Update `ALLOWED_HOSTS` with your domain
-4. Use a production-grade database (managed PostgreSQL)
-5. Configure email settings for user notifications
-6. Set up SSL/TLS with a reverse proxy (nginx)
-7. Configure S3 for media file storage
-8. Set up monitoring and logging
-9. Use environment-specific `.env` files
-10. Enable database backups
+4. Update `WS_ALLOWED_ORIGINS` with your domain(s)
+5. Use a production-grade database (managed PostgreSQL)
+6. Configure email settings for user notifications
+7. Set up SSL/TLS with a reverse proxy (nginx)
+8. Configure S3 for media file storage
+9. Set up monitoring and logging
+10. Use environment-specific `.env` files
+11. Enable database backups
+
+---
+
+## Security Features
+
+Ridgway Garage implements multiple layers of security:
+
+### 🔐 Authentication & Authorization
+- **Token-based API authentication** - API endpoints use secure token authentication
+- **Django Allauth integration** - Social authentication with Discord OAuth
+- **Session management** - 24-hour session timeout with automatic refresh
+- **CSRF protection** - All forms protected against Cross-Site Request Forgery
+- **Secure cookies** - HttpOnly, SameSite, and Secure flags on session/CSRF cookies
+
+### 🛡️ Security Headers
+The application automatically sets the following security headers in production:
+- **HSTS** (HTTP Strict Transport Security) - Forces HTTPS connections for 1 year
+- **X-Content-Type-Options** - Prevents MIME type sniffing
+- **X-Frame-Options** - Prevents clickjacking attacks
+- **XSS Filter** - Browser XSS protection enabled
+- **Content Security Policy** - Restricts resource loading to trusted sources
+
+### 🌐 WebSocket Security
+- **Origin validation** - WebSocket connections validated against allowed origins
+- **Token authentication** - Live telemetry streams require valid API tokens
+- **Configurable origins** - `WS_ALLOWED_ORIGINS` environment variable controls access
+
+### 📁 File Upload Security
+- **Extension validation** - Only `.ibt` files accepted
+- **Size limits** - Configurable maximum upload size (default 2GB)
+- **Minimum size validation** - Prevents empty/malformed files
+- **Content-type validation** - Verifies file format before processing
+
+### 🔍 Database Security
+- **Connection pooling** - Secure PostgreSQL connection management
+- **Parameterized queries** - Django ORM prevents SQL injection
+- **Index optimization** - 9+ database indexes for query performance
+- **N+1 query prevention** - Optimized queries with prefetch_related
+
+### 🚀 Best Practices
+- **No default SECRET_KEY** - Forces secure key generation
+- **DEBUG disabled by default** - Prevents information disclosure
+- **Secure by default** - All security features active in production
+- **Regular updates** - Keep dependencies updated for security patches
+
+### 📋 Security Checklist for Production
+
+Before deploying to production, ensure:
+
+- [ ] `SECRET_KEY` is set to a strong, unique value (50+ characters)
+- [ ] `DEBUG=False` in production environment
+- [ ] `ALLOWED_HOSTS` configured with your domain
+- [ ] `WS_ALLOWED_ORIGINS` configured with your domain
+- [ ] SSL/TLS certificate installed and configured
+- [ ] Database credentials are strong and rotated regularly
+- [ ] Redis is password-protected
+- [ ] File upload size limits are appropriate for your needs
+- [ ] Regular database backups are configured
+- [ ] Monitoring and alerting are in place
+- [ ] Log files are rotated and retained appropriately
+- [ ] Security headers are verified using tools like securityheaders.com
 
 ---
 

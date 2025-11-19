@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
 
 import os
 from django.urls import re_path
+from django.conf import settings
 
 from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
@@ -27,20 +28,45 @@ django_asgi_app = get_asgi_application()
 # Import consumers after Django is initialized
 from telemetry import consumers
 
-# Custom origin validator that allows all origins (for machine-to-machine connections)
-class AllowAllOriginsValidator(OriginValidator):
-    """Allow connections from any origin - used for .NET client WebSocket connections"""
+# Get allowed WebSocket origins from environment (for .NET client connections)
+# Format: "localhost,127.0.0.1,your-domain.com" (comma-separated, no protocol)
+from decouple import config
+WS_ALLOWED_ORIGINS = config(
+    'WS_ALLOWED_ORIGINS',
+    default='localhost,127.0.0.1',
+    cast=lambda v: [s.strip() for s in v.split(',')]
+)
+
+# Custom origin validator for machine-to-machine WebSocket connections
+class TokenAuthOriginValidator(OriginValidator):
+    """
+    Validate WebSocket origins against allowed list.
+
+    Security: While this validates origins, the LiveTelemetryConsumer MUST also
+    validate API tokens on each message. Origin validation alone is insufficient
+    as origins can be spoofed. This is defense-in-depth.
+
+    Allowed origins are configured via WS_ALLOWED_ORIGINS environment variable.
+    """
     def __init__(self, application):
-        # Pass empty list for allowed_origins since we override valid_origin anyway
-        super().__init__(application, allowed_origins=[])
+        # Build full origin list including protocols for development/production
+        allowed_origins = []
+        for host in WS_ALLOWED_ORIGINS:
+            allowed_origins.append(f'http://{host}')
+            allowed_origins.append(f'https://{host}')
+            allowed_origins.append(f'http://{host}:42069')  # Development port
+            allowed_origins.append(f'https://{host}:42069')
+
+        super().__init__(application, allowed_origins=allowed_origins)
 
     def valid_origin(self, parsed_origin):
-        return True
+        # Call parent's validation logic
+        return super().valid_origin(parsed_origin)
 
 # WebSocket URL patterns
 websocket_urlpatterns = [
-    # Unauthenticated route for .NET client (machine-to-machine, no auth required)
-    re_path(r'ws/telemetry/live/$', AllowAllOriginsValidator(consumers.LiveTelemetryConsumer.as_asgi())),
+    # Token-authenticated route for .NET client (validates API token on each message)
+    re_path(r'ws/telemetry/live/$', TokenAuthOriginValidator(consumers.LiveTelemetryConsumer.as_asgi())),
 
     # Authenticated routes for web browsers (require login)
     re_path(r'ws/telemetry/processing/(?P<session_id>\d+)/$', AuthMiddlewareStack(consumers.TelemetryProcessingConsumer.as_asgi())),

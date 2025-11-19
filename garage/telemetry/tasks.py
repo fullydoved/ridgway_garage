@@ -199,10 +199,15 @@ def parse_ibt_file(self, session_id):
                 if data is not None:
                     # Data is already a list, no need to convert
                     telemetry_data[channel] = data
-            except (KeyError, AttributeError, Exception) as e:
-                # Channel not available in this telemetry file
-                logger.debug(f"Channel {channel} not available: {e}")
-                pass
+            except KeyError:
+                # Channel not in telemetry data
+                logger.debug(f"Channel {channel} not in telemetry data")
+            except (AttributeError, TypeError) as e:
+                # Data structure issue with channel
+                logger.warning(f"Error accessing channel {channel}: {type(e).__name__}: {e}")
+            except Exception as e:
+                # Unexpected error - log with more detail for debugging
+                logger.error(f"Unexpected error processing channel {channel}: {type(e).__name__}: {e}", exc_info=True)
 
         send_processing_update(
             session_id, 'processing', 30,
