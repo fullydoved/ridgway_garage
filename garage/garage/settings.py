@@ -70,8 +70,6 @@ INSTALLED_APPS = [
     # Django Allauth for authentication
     'allauth',
     'allauth.account',
-    'allauth.socialaccount',
-    'allauth.socialaccount.providers.discord',
 
     # Local apps
     'telemetry',
@@ -188,25 +186,6 @@ ACCOUNT_LOGOUT_ON_GET = False  # Require POST to logout (security)
 LOGIN_REDIRECT_URL = '/'
 ACCOUNT_LOGOUT_REDIRECT_URL = '/'
 LOGIN_URL = '/accounts/login/'
-
-# Social account providers configuration
-SOCIALACCOUNT_PROVIDERS = {
-    'discord': {
-        'APP': {
-            'client_id': config('DISCORD_CLIENT_ID', default=''),
-            'secret': config('DISCORD_CLIENT_SECRET', default=''),
-        },
-        'SCOPE': ['identify', 'email'],  # Request user ID and email
-        'AUTH_PARAMS': {
-            'auth_type': 'rerequest',  # Force permission dialog even if previously denied
-        },
-    }
-}
-
-# Automatically create user profiles on signup
-SOCIALACCOUNT_AUTO_SIGNUP = True
-SOCIALACCOUNT_EMAIL_REQUIRED = True
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
