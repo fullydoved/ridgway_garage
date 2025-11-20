@@ -252,8 +252,31 @@ public class SettingsForm : Form
 
     private void BtnSave_Click(object? sender, EventArgs e)
     {
-        settings.ServerUrl = txtServerUrl.Text.Trim();
-        settings.ApiToken = txtApiToken.Text.Trim();
+        var serverUrl = txtServerUrl.Text.Trim();
+        var apiToken = txtApiToken.Text.Trim();
+
+        // Validate API token doesn't look like a URL
+        if (!string.IsNullOrEmpty(apiToken) &&
+            (apiToken.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+             apiToken.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+        {
+            var result = MessageBox.Show(
+                "Warning: The API Token appears to be a URL, not a token.\n\n" +
+                "API tokens should be long random strings (64 characters), not URLs.\n\n" +
+                "Do you want to save anyway?",
+                "Invalid API Token",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (result == DialogResult.No)
+            {
+                this.DialogResult = DialogResult.None; // Prevent form from closing
+                return;
+            }
+        }
+
+        settings.ServerUrl = serverUrl;
+        settings.ApiToken = apiToken;
         settings.AutoUpload = chkAutoUpload.Checked;
         settings.StartWithWindows = chkStartWithWindows.Checked;
         telemetryFolder = txtTelemetryFolder.Text.Trim();
