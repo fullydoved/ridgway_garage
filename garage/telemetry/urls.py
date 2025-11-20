@@ -10,6 +10,7 @@ app_name = 'telemetry'
 urlpatterns = [
     # Home/Dashboard
     path('', views.home, name='home'),
+    path('analysis/', views.dashboard_analysis, name='dashboard_analysis'),
 
     # Session management
     path('sessions/', views.session_list, name='session_list'),
@@ -59,4 +60,7 @@ urlpatterns = [
     # API
     path('api/auth/test/', views.api_auth_test, name='api_auth_test'),
     path('api/upload/', views.api_upload, name='api_upload'),
+    path('api/laps/<int:lap_id>/telemetry/', views.api_lap_telemetry, name='api_lap_telemetry'),
+    path('api/fastest-laps/', views.api_fastest_laps, name='api_fastest_laps'),
+    path('api/generate-chart/', views.api_generate_chart, name='api_generate_chart'),
 ]

@@ -302,6 +302,191 @@ def home(request):
 
 
 @login_required
+def dashboard_analysis(request):
+    """
+    ATLAS-style telemetry analysis dashboard with 3-column layout.
+
+    Features:
+    - Left: Channel selector (checkboxes for telemetry channels)
+    - Middle: Dynamic charts and track map
+    - Right: Fastest laps list (user + teammates)
+
+    Default view: Shows best lap from most recent session vs personal best
+    """
+    print("=" * 80)
+    print(f"[DEBUG] dashboard_analysis VIEW CALLED")
+    print(f"[DEBUG] Request user: {request.user}")
+    print(f"[DEBUG] Is authenticated: {request.user.is_authenticated}")
+    print("=" * 80)
+
+    context = {
+        'initial_laps': [],
+        'tracks': [],
+        'cars': [],
+        'selected_track': None,
+        'selected_car': None,
+    }
+
+    if not request.user.is_authenticated:
+        return redirect('account_login')
+
+    print(f"[DEBUG] dashboard_analysis called for user: {request.user.username}")
+
+    # Get most recent session with laps
+    recent_session = Session.objects.filter(
+        driver=request.user,
+        processing_status='completed'
+    ).prefetch_related('laps').annotate(
+        lap_count=Count('laps')
+    ).filter(lap_count__gt=0).order_by('-session_date').first()
+
+    print(f"[DEBUG] recent_session: {recent_session}")
+    if recent_session:
+        print(f"[DEBUG] recent_session ID: {recent_session.id}, laps: {recent_session.lap_count}")
+        # Get best lap from recent session
+        recent_best_lap = recent_session.laps.filter(
+            is_valid=True,
+            lap_time__gt=0
+        ).order_by('lap_time').first()
+
+        print(f"[DEBUG] recent_best_lap: {recent_best_lap}")
+        if recent_best_lap:
+            print(f"[DEBUG] Found best lap ID: {recent_best_lap.id}, time: {recent_best_lap.lap_time}")
+            context['selected_track'] = recent_session.track
+            context['selected_car'] = recent_session.car
+            context['initial_laps'].append(recent_best_lap)
+            print(f"[DEBUG] Set selected_track: {context['selected_track']}, selected_car: {context['selected_car']}")
+
+            # Get personal best for this track/car combination
+            if recent_session.track and recent_session.car:
+                personal_best = Lap.objects.filter(
+                    session__driver=request.user,
+                    session__track=recent_session.track,
+                    session__car=recent_session.car,
+                    is_valid=True,
+                    lap_time__gt=0
+                ).exclude(
+                    id=recent_best_lap.id  # Don't include the same lap
+                ).order_by('lap_time').first()
+
+                if personal_best:
+                    context['initial_laps'].append(personal_best)
+
+    # Get list of tracks user has driven (for dropdown)
+    context['tracks'] = Track.objects.filter(
+        sessions__driver=request.user
+    ).distinct().order_by('name')
+
+    # Get list of cars user has driven (for dropdown)
+    context['cars'] = Car.objects.filter(
+        sessions__driver=request.user
+    ).distinct().order_by('name')
+
+    # DEBUG: Log what we're passing to template
+    print(f"[DEBUG] Final context before render:")
+    print(f"  initial_laps: {len(context['initial_laps'])} laps")
+    if context['initial_laps']:
+        print(f"  Lap IDs: {[lap.id for lap in context['initial_laps']]}")
+    print(f"  selected_track: {context['selected_track']}")
+    print(f"  selected_car: {context['selected_car']}")
+    print(f"  tracks count: {context['tracks'].count()}")
+    print(f"  cars count: {context['cars'].count()}")
+    print("=" * 80)
+
+    # Define available telemetry channels grouped by category
+    context['channel_groups'] = {
+        'core': {
+            'name': 'Core Racing',
+            'channels': [
+                {'id': 'Speed', 'label': 'Speed', 'default': True},
+                {'id': 'Throttle', 'label': 'Throttle', 'default': True},
+                {'id': 'Brake', 'label': 'Brake', 'default': True},
+                {'id': 'Gear', 'label': 'Gear', 'default': True},
+                {'id': 'RPM', 'label': 'RPM', 'default': True},
+            ]
+        },
+        'steering': {
+            'name': 'Steering & Inputs',
+            'channels': [
+                {'id': 'SteeringWheelAngle', 'label': 'Steering Angle', 'default': True},
+                {'id': 'Clutch', 'label': 'Clutch', 'default': False},
+            ]
+        },
+        'tires': {
+            'name': 'Tire Temperatures',
+            'channels': [
+                {'id': 'LFtempL', 'label': 'LF Temp (Left)', 'default': False},
+                {'id': 'LFtempM', 'label': 'LF Temp (Middle)', 'default': False},
+                {'id': 'LFtempR', 'label': 'LF Temp (Right)', 'default': False},
+                {'id': 'RFtempL', 'label': 'RF Temp (Left)', 'default': False},
+                {'id': 'RFtempM', 'label': 'RF Temp (Middle)', 'default': False},
+                {'id': 'RFtempR', 'label': 'RF Temp (Right)', 'default': False},
+                {'id': 'LRtempL', 'label': 'LR Temp (Left)', 'default': False},
+                {'id': 'LRtempM', 'label': 'LR Temp (Middle)', 'default': False},
+                {'id': 'LRtempR', 'label': 'LR Temp (Right)', 'default': False},
+                {'id': 'RRtempL', 'label': 'RR Temp (Left)', 'default': False},
+                {'id': 'RRtempM', 'label': 'RR Temp (Middle)', 'default': False},
+                {'id': 'RRtempR', 'label': 'RR Temp (Right)', 'default': False},
+            ]
+        },
+        'pressure': {
+            'name': 'Tire Pressure',
+            'channels': [
+                {'id': 'LFcoldPressure', 'label': 'LF Pressure', 'default': False},
+                {'id': 'RFcoldPressure', 'label': 'RF Pressure', 'default': False},
+                {'id': 'LRcoldPressure', 'label': 'LR Pressure', 'default': False},
+                {'id': 'RRcoldPressure', 'label': 'RR Pressure', 'default': False},
+            ]
+        },
+        'suspension': {
+            'name': 'Suspension & Ride Height',
+            'channels': [
+                {'id': 'LFrideHeight', 'label': 'LF Ride Height', 'default': False},
+                {'id': 'RFrideHeight', 'label': 'RF Ride Height', 'default': False},
+                {'id': 'LRrideHeight', 'label': 'LR Ride Height', 'default': False},
+                {'id': 'RRrideHeight', 'label': 'RR Ride Height', 'default': False},
+                {'id': 'LFshockDefl', 'label': 'LF Shock Deflection', 'default': False},
+                {'id': 'RFshockDefl', 'label': 'RF Shock Deflection', 'default': False},
+                {'id': 'LRshockDefl', 'label': 'LR Shock Deflection', 'default': False},
+                {'id': 'RRshockDefl', 'label': 'RR Shock Deflection', 'default': False},
+                {'id': 'LFshockVel', 'label': 'LF Shock Velocity', 'default': False},
+                {'id': 'RFshockVel', 'label': 'RF Shock Velocity', 'default': False},
+                {'id': 'LRshockVel', 'label': 'LR Shock Velocity', 'default': False},
+                {'id': 'RRshockVel', 'label': 'RR Shock Velocity', 'default': False},
+            ]
+        },
+        'acceleration': {
+            'name': 'G-Forces',
+            'channels': [
+                {'id': 'LatAccel', 'label': 'Lateral Acceleration', 'default': False},
+                {'id': 'LongAccel', 'label': 'Longitudinal Acceleration', 'default': False},
+                {'id': 'VertAccel', 'label': 'Vertical Acceleration', 'default': False},
+            ]
+        },
+        'orientation': {
+            'name': 'Orientation',
+            'channels': [
+                {'id': 'Roll', 'label': 'Roll', 'default': False},
+                {'id': 'Pitch', 'label': 'Pitch', 'default': False},
+                {'id': 'Yaw', 'label': 'Yaw', 'default': False},
+                {'id': 'RollRate', 'label': 'Roll Rate', 'default': False},
+                {'id': 'PitchRate', 'label': 'Pitch Rate', 'default': False},
+                {'id': 'YawRate', 'label': 'Yaw Rate', 'default': False},
+            ]
+        },
+        'fuel': {
+            'name': 'Fuel',
+            'channels': [
+                {'id': 'FuelLevel', 'label': 'Fuel Level', 'default': False},
+                {'id': 'FuelLevelPct', 'label': 'Fuel Level %', 'default': False},
+            ]
+        },
+    }
+
+    return render(request, 'telemetry/dashboard_analysis.html', context)
+
+
+@login_required
 def session_list(request):
     """
     List all sessions for the logged-in user (excluding sessions with 0 laps).
@@ -1718,3 +1903,439 @@ def api_upload(request):
         'filename': uploaded_file.name,
         'message': 'File uploaded successfully and queued for processing'
     }, status=201)
+
+
+# ============================================================================
+# Dashboard Analysis API Endpoints
+# ============================================================================
+
+@login_required
+def api_lap_telemetry(request, lap_id):
+    """
+    API endpoint to get telemetry data for a specific lap.
+    Returns JSON with all telemetry channels for dynamic chart rendering.
+
+    Args:
+        lap_id: The ID of the lap to fetch telemetry for
+
+    Returns:
+        JSON with lap metadata and telemetry data
+    """
+    from django.http import JsonResponse
+
+    try:
+        lap = get_object_or_404(Lap, id=lap_id)
+
+        # Check if user has permission to view this lap
+        # Allow if: user owns the session, or it's a teammate's lap and team allows sharing
+        if lap.session.driver != request.user:
+            if not lap.session.team or not lap.session.team.members.filter(id=request.user.id).exists():
+                return JsonResponse({
+                    'error': 'You do not have permission to view this lap'
+                }, status=403)
+
+        # Get telemetry data
+        telemetry = lap.telemetry
+        if not telemetry:
+            return JsonResponse({
+                'error': 'No telemetry data available for this lap'
+            }, status=404)
+
+        return JsonResponse({
+            'success': True,
+            'lap': {
+                'id': lap.id,
+                'lap_number': lap.lap_number,
+                'lap_time': lap.lap_time,
+                'driver': lap.session.driver.username,
+                'track': lap.session.track.name if lap.session.track else 'Unknown',
+                'car': lap.session.car.name if lap.session.car else 'Unknown',
+                'session_date': lap.session.session_date.isoformat() if lap.session.session_date else None,
+            },
+            'telemetry': telemetry.data,  # All channel data
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def api_fastest_laps(request):
+    """
+    API endpoint to get fastest laps for a specific track/car combination.
+
+    Query parameters:
+        track_id: Track ID (required)
+        car_id: Car ID (required)
+        include_team: Whether to include teammate laps (default: true)
+        limit: Number of laps to return per category (default: 10)
+
+    Returns:
+        JSON with user's fastest laps and teammates' fastest laps
+    """
+    from django.http import JsonResponse
+
+    try:
+        track_id = request.GET.get('track_id')
+        car_id = request.GET.get('car_id')
+        include_team = request.GET.get('include_team', 'true').lower() == 'true'
+        limit = int(request.GET.get('limit', 10))
+
+        if not track_id or not car_id:
+            return JsonResponse({
+                'error': 'track_id and car_id are required'
+            }, status=400)
+
+        # Get user's fastest laps
+        user_laps = Lap.objects.filter(
+            session__driver=request.user,
+            session__track_id=track_id,
+            session__car_id=car_id,
+            is_valid=True
+        ).select_related(
+            'session', 'session__track', 'session__car', 'session__driver'
+        ).order_by('lap_time')[:limit]
+
+        user_laps_data = [{
+            'id': lap.id,
+            'lap_number': lap.lap_number,
+            'lap_time': lap.lap_time,
+            'session_id': lap.session.id,
+            'session_type': lap.session.session_type or 'Unknown',
+            'session_date': lap.session.session_date.isoformat() if lap.session.session_date else None,
+            'is_personal_best': lap.is_personal_best,
+        } for lap in user_laps]
+
+        # Get teammates' fastest laps if requested
+        teammate_laps_data = []
+        if include_team:
+            # Find teams user belongs to
+            user_teams = Team.objects.filter(members=request.user)
+
+            if user_teams.exists():
+                # Get teammates (excluding current user)
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                teammates = User.objects.filter(
+                    teams__in=user_teams
+                ).exclude(id=request.user.id).distinct()
+
+                # Get each teammate's best lap for this track/car
+                for teammate in teammates:
+                    best_lap = Lap.objects.filter(
+                        session__driver=teammate,
+                        session__track_id=track_id,
+                        session__car_id=car_id,
+                        is_valid=True
+                    ).select_related(
+                        'session', 'session__track', 'session__car', 'session__driver'
+                    ).order_by('lap_time').first()
+
+                    if best_lap:
+                        teammate_laps_data.append({
+                            'id': best_lap.id,
+                            'lap_number': best_lap.lap_number,
+                            'lap_time': best_lap.lap_time,
+                            'driver': teammate.username,
+                            'session_id': best_lap.session.id,
+                            'session_type': best_lap.session.session_type or 'Unknown',
+                            'session_date': best_lap.session.session_date.isoformat() if best_lap.session.session_date else None,
+                        })
+
+                # Sort by lap time
+                teammate_laps_data.sort(key=lambda x: x['lap_time'])
+
+        return JsonResponse({
+            'success': True,
+            'track_id': int(track_id),
+            'car_id': int(car_id),
+            'user_laps': user_laps_data,
+            'teammate_laps': teammate_laps_data,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def api_generate_chart(request):
+    """
+    API endpoint to generate dynamic telemetry charts based on selected laps and channels.
+
+    POST body (JSON):
+        lap_ids: List of lap IDs to compare
+        channels: List of channel names to display
+
+    Returns:
+        JSON with chart HTML
+    """
+    from django.http import JsonResponse
+    import json
+    from plotly.subplots import make_subplots
+    import plotly.graph_objects as go
+    import numpy as np
+
+    try:
+        # Parse request body
+        body = json.loads(request.body)
+        lap_ids = body.get('lap_ids', [])
+        selected_channels = body.get('channels', [])
+
+        if not lap_ids:
+            return JsonResponse({'error': 'No laps provided'}, status=400)
+
+        if not selected_channels:
+            return JsonResponse({'error': 'No channels selected'}, status=400)
+
+        # Fetch laps
+        laps = []
+        for lap_id in lap_ids:
+            lap = Lap.objects.filter(id=lap_id).select_related(
+                'session', 'session__driver', 'session__track', 'session__car', 'telemetry'
+            ).first()
+
+            if not lap:
+                continue
+
+            # Check permissions
+            if lap.session.driver != request.user:
+                if not lap.session.team or not lap.session.team.members.filter(id=request.user.id).exists():
+                    continue
+
+            laps.append(lap)
+
+        if not laps:
+            return JsonResponse({'error': 'No valid laps found'}, status=404)
+
+        # Color palette
+        colors = ['#00d1b2', '#ff6b6b', '#4ecdc4', '#ffe66d', '#a8dadc', '#f1fa8c', '#ff79c6', '#bd93f9']
+
+        # Extract telemetry data
+        lap_data = []
+        for i, lap in enumerate(laps):
+            telemetry = lap.telemetry
+            if telemetry and telemetry.data:
+                lap_data.append({
+                    'lap': lap,
+                    'data': telemetry.data,
+                    'color': colors[i % len(colors)],
+                    'name': f"{lap.session.driver.username} - {lap.lap_time:.3f}s"
+                })
+
+        if not lap_data:
+            return JsonResponse({'error': 'No telemetry data available'}, status=404)
+
+        # Group channels by subplot
+        channel_groups = {
+            'delta': ['LapDist', 'SessionTime'],  # For time delta calculation
+            'Speed': ['Speed', 'LapDist'],
+            'Throttle': ['Throttle', 'LapDist'],
+            'Brake': ['Brake', 'LapDist'],
+            'Clutch': ['Clutch', 'LapDist'],
+            'Gear': ['Gear', 'LapDist'],
+            'RPM': ['RPM', 'LapDist'],
+            'SteeringWheelAngle': ['SteeringWheelAngle', 'LapDist'],
+            # Tire Temperatures
+            'LFtempL': ['LFtempL', 'LapDist'],
+            'LFtempM': ['LFtempM', 'LapDist'],
+            'LFtempR': ['LFtempR', 'LapDist'],
+            'RFtempL': ['RFtempL', 'LapDist'],
+            'RFtempM': ['RFtempM', 'LapDist'],
+            'RFtempR': ['RFtempR', 'LapDist'],
+            'LRtempL': ['LRtempL', 'LapDist'],
+            'LRtempM': ['LRtempM', 'LapDist'],
+            'LRtempR': ['LRtempR', 'LapDist'],
+            'RRtempL': ['RRtempL', 'LapDist'],
+            'RRtempM': ['RRtempM', 'LapDist'],
+            'RRtempR': ['RRtempR', 'LapDist'],
+            # Tire Pressures
+            'LFcoldPressure': ['LFcoldPressure', 'LapDist'],
+            'RFcoldPressure': ['RFcoldPressure', 'LapDist'],
+            'LRcoldPressure': ['LRcoldPressure', 'LapDist'],
+            'RRcoldPressure': ['RRcoldPressure', 'LapDist'],
+            # Suspension - Ride Heights
+            'LFrideHeight': ['LFrideHeight', 'LapDist'],
+            'RFrideHeight': ['RFrideHeight', 'LapDist'],
+            'LRrideHeight': ['LRrideHeight', 'LapDist'],
+            'RRrideHeight': ['RRrideHeight', 'LapDist'],
+            # Suspension - Shock Deflection
+            'LFshockDefl': ['LFshockDefl', 'LapDist'],
+            'RFshockDefl': ['RFshockDefl', 'LapDist'],
+            'LRshockDefl': ['LRshockDefl', 'LapDist'],
+            'RRshockDefl': ['RRshockDefl', 'LapDist'],
+            # Suspension - Shock Velocity
+            'LFshockVel': ['LFshockVel', 'LapDist'],
+            'RFshockVel': ['RFshockVel', 'LapDist'],
+            'LRshockVel': ['LRshockVel', 'LapDist'],
+            'RRshockVel': ['RRshockVel', 'LapDist'],
+            # Acceleration / G-Forces
+            'LatAccel': ['LatAccel', 'LapDist'],
+            'LongAccel': ['LongAccel', 'LapDist'],
+            'VertAccel': ['VertAccel', 'LapDist'],
+            # Orientation
+            'Roll': ['Roll', 'LapDist'],
+            'Pitch': ['Pitch', 'LapDist'],
+            'Yaw': ['Yaw', 'LapDist'],
+            'RollRate': ['RollRate', 'LapDist'],
+            'PitchRate': ['PitchRate', 'LapDist'],
+            'YawRate': ['YawRate', 'LapDist'],
+            # Fuel
+            'FuelLevel': ['FuelLevel', 'LapDist'],
+            'FuelLevelPct': ['FuelLevelPct', 'LapDist'],
+        }
+
+        # Determine subplots to create
+        subplots = []
+        subplot_titles = []
+
+        # Always include delta if comparing multiple laps
+        if len(lap_data) > 1:
+            subplots.append('delta')
+            subplot_titles.append('Time Delta vs Fastest Lap')
+
+        # Add selected channels
+        for channel in selected_channels:
+            if channel in channel_groups:
+                # Check if first lap has this channel
+                if all(req in lap_data[0]['data'] for req in channel_groups[channel]):
+                    subplots.append(channel)
+                    # Format channel name for display
+                    display_name = channel.replace('Wheel', ' Wheel').replace('Accel', ' Accel')
+                    subplot_titles.append(display_name)
+
+        if not subplots:
+            return JsonResponse({'error': 'No valid channels to display'}, status=400)
+
+        # Create subplots
+        fig = make_subplots(
+            rows=len(subplots),
+            cols=1,
+            shared_xaxes=True,
+            vertical_spacing=0.02,
+            subplot_titles=subplot_titles,
+            row_heights=[350] * len(subplots)
+        )
+
+        # Sort laps by lap time for delta calculation
+        fastest_lap = min(lap_data, key=lambda x: x['lap'].lap_time)
+
+        # Add traces for each subplot
+        for row_idx, subplot_type in enumerate(subplots, start=1):
+            if subplot_type == 'delta' and len(lap_data) > 1:
+                # Calculate time delta for each lap vs fastest
+                for lap_info in lap_data:
+                    if lap_info == fastest_lap:
+                        continue  # Skip fastest lap (delta is 0)
+
+                    try:
+                        # Get distance and time arrays
+                        distance = np.array(lap_info['data'].get('LapDist', []))
+                        time = np.array(lap_info['data'].get('SessionTime', []))
+                        fastest_distance = np.array(fastest_lap['data'].get('LapDist', []))
+                        fastest_time = np.array(fastest_lap['data'].get('SessionTime', []))
+
+                        if len(distance) == 0 or len(fastest_distance) == 0:
+                            continue
+
+                        # Interpolate to common distance points
+                        common_distance = np.linspace(0, min(distance.max(), fastest_distance.max()), 500)
+                        interp_time = np.interp(common_distance, distance, time)
+                        interp_fastest_time = np.interp(common_distance, fastest_distance, fastest_time)
+
+                        # Calculate delta (positive = slower)
+                        delta = interp_time - interp_fastest_time
+
+                        fig.add_trace(
+                            go.Scatter(
+                                x=common_distance,
+                                y=delta,
+                                name=lap_info['name'],
+                                line=dict(color=lap_info['color'], width=2),
+                                hovertemplate='Distance: %{x:.1f}m<br>Delta: %{y:.3f}s<extra></extra>'
+                            ),
+                            row=row_idx,
+                            col=1
+                        )
+                    except Exception as e:
+                        print(f"Error calculating delta: {e}")
+
+                # Update y-axis for delta
+                fig.update_yaxes(title_text="Time Delta (s)", row=row_idx, col=1)
+
+            else:
+                # Regular channel subplot
+                required_channels = channel_groups.get(subplot_type, [])
+
+                for lap_info in lap_data:
+                    try:
+                        # Check if lap has required channels
+                        if not all(ch in lap_info['data'] for ch in required_channels):
+                            continue
+
+                        x_data = lap_info['data'].get('LapDist', [])
+                        y_data = lap_info['data'].get(subplot_type, [])
+
+                        if len(x_data) == 0 or len(y_data) == 0:
+                            continue
+
+                        # Truncate to shortest length
+                        min_len = min(len(x_data), len(y_data))
+                        x_data = x_data[:min_len]
+                        y_data = y_data[:min_len]
+
+                        fig.add_trace(
+                            go.Scatter(
+                                x=x_data,
+                                y=y_data,
+                                name=lap_info['name'],
+                                line=dict(color=lap_info['color'], width=2),
+                                hovertemplate=f'Distance: %{{x:.1f}}m<br>{subplot_type}: %{{y:.2f}}<extra></extra>'
+                            ),
+                            row=row_idx,
+                            col=1
+                        )
+                    except Exception as e:
+                        print(f"Error adding trace for {subplot_type}: {e}")
+
+                # Update y-axis label
+                fig.update_yaxes(title_text=subplot_type, row=row_idx, col=1)
+
+        # Update x-axis (only bottom subplot)
+        fig.update_xaxes(title_text="Distance (m)", row=len(subplots), col=1)
+
+        # Update layout
+        fig.update_layout(
+            height=350 * len(subplots),
+            hovermode='x unified',
+            template='plotly_dark',
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(l=60, r=20, t=60, b=60)
+        )
+
+        # Convert to JSON for client-side rendering
+        chart_json = fig.to_json()
+
+        return JsonResponse({
+            'success': True,
+            'chart_json': chart_json,
+            'lap_count': len(lap_data),
+            'subplot_count': len(subplots)
+        })
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': str(e)}, status=500)

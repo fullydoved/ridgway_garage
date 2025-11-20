@@ -210,6 +210,18 @@ def parse_ibt_file(self, session_id):
             'RRtempCL', 'RRtempCM', 'RRtempCR',  # Right Rear tire carcass temps
             'LFcoldPressure', 'RFcoldPressure', 'LRcoldPressure', 'RRcoldPressure',
             'FuelLevel', 'FuelLevelPct',
+            # Suspension - Ride Heights (mm)
+            'LFrideHeight', 'RFrideHeight', 'LRrideHeight', 'RRrideHeight',
+            # Suspension - Shock Deflection (mm)
+            'LFshockDefl', 'RFshockDefl', 'LRshockDefl', 'RRshockDefl',
+            # Suspension - Shock Velocity (m/s)
+            'LFshockVel', 'RFshockVel', 'LRshockVel', 'RRshockVel',
+            # Acceleration / G-Forces (m/s²)
+            'LatAccel', 'LongAccel', 'VertAccel',
+            # Orientation (radians)
+            'Roll', 'Pitch', 'Yaw',
+            # Rotation Rates (rad/s)
+            'RollRate', 'PitchRate', 'YawRate',
         ]
 
         # Extract data for each channel using get_all(key)
