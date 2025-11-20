@@ -120,10 +120,25 @@ def parse_ibt_file(self, session_id):
 
         # Auto-detect car and driver name if not specified
         if 'DriverInfo' in session_info and session_info['DriverInfo']:
-            drivers = session_info['DriverInfo'].get('Drivers', [])
-            if drivers:
-                # Get the user's info (index 0 is typically the player)
-                driver_info = drivers[0]
+            driver_info_section = session_info['DriverInfo']
+            drivers = driver_info_section.get('Drivers', [])
+
+            # Get the player's car index to identify which driver is the actual player
+            # DriverCarIdx tells us which entry in the Drivers array is the player
+            player_car_idx = driver_info_section.get('DriverCarIdx')
+
+            if drivers and player_car_idx is not None:
+                # Find the player by matching CarIdx with DriverCarIdx
+                driver_info = None
+                for driver in drivers:
+                    if driver.get('CarIdx') == player_car_idx:
+                        driver_info = driver
+                        break
+
+                # Fallback to first driver if we couldn't find a match
+                if driver_info is None:
+                    logger.warning(f"Could not find player driver with CarIdx {player_car_idx}, using first driver as fallback")
+                    driver_info = drivers[0]
 
                 # Extract driver name
                 driver_name = (driver_info.get('UserName') or '').strip()
@@ -144,7 +159,7 @@ def parse_ibt_file(self, session_id):
                             }
                         )
                         session.car = car
-                        logger.info(f"Auto-detected car: {car_name}")
+                        logger.info(f"Auto-detected car: {car_name} (CarIdx: {player_car_idx})")
 
         # Extract session type
         if 'SessionInfo' in session_info and session_info['SessionInfo'] and 'Sessions' in session_info['SessionInfo']:
