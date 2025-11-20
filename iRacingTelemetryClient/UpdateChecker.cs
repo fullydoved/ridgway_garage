@@ -198,4 +198,82 @@ public class UpdateChecker
             LogManager.Log($"Failed to open release page: {ex.Message}", "ERROR");
         }
     }
+
+    /// <summary>
+    /// Finds the release ZIP file asset from a GitHub release
+    /// </summary>
+    public GitHubAsset? FindReleaseZip(GitHubRelease release)
+    {
+        return release.Assets.FirstOrDefault(a => a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Downloads a release file from GitHub with progress reporting
+    /// </summary>
+    public async Task<bool> DownloadReleaseAsync(string downloadUrl, string destinationPath, IProgress<DownloadProgress>? progress = null)
+    {
+        try
+        {
+            LogManager.Log($"Starting download from: {downloadUrl}");
+            LogManager.Log($"Destination: {destinationPath}");
+
+            // Get the file with headers first to read content length
+            using var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            var totalBytes = response.Content.Headers.ContentLength ?? 0;
+            LogManager.Log($"File size: {totalBytes / 1024 / 1024:F2} MB");
+
+            // Create directory if it doesn't exist
+            var directory = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            // Download the file in chunks
+            using var contentStream = await response.Content.ReadAsStreamAsync();
+            using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
+
+            var buffer = new byte[8192];
+            long totalBytesRead = 0;
+            int bytesRead;
+
+            while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            {
+                await fileStream.WriteAsync(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+
+                // Report progress
+                if (progress != null && totalBytes > 0)
+                {
+                    var percentComplete = (int)((totalBytesRead * 100) / totalBytes);
+                    progress.Report(new DownloadProgress
+                    {
+                        BytesDownloaded = totalBytesRead,
+                        TotalBytes = totalBytes,
+                        PercentComplete = percentComplete
+                    });
+                }
+            }
+
+            LogManager.Log($"Download complete: {destinationPath}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogManager.Log($"Download failed: {ex.Message}", "ERROR");
+            return false;
+        }
+    }
+}
+
+/// <summary>
+/// Progress information for file downloads
+/// </summary>
+public class DownloadProgress
+{
+    public long BytesDownloaded { get; set; }
+    public long TotalBytes { get; set; }
+    public int PercentComplete { get; set; }
 }

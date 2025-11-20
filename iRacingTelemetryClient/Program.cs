@@ -331,7 +331,7 @@ public class MainForm : Form
             LogManager.Log("File monitoring started");
 
             // Check for existing files that haven't been uploaded
-            await ScanExistingFiles();
+            ScanExistingFiles();
         }
         catch (Exception ex)
         {
@@ -368,7 +368,7 @@ public class MainForm : Form
         LogManager.Log("File monitoring stopped");
     }
 
-    private async Task ScanExistingFiles()
+    private void ScanExistingFiles()
     {
         try
         {
@@ -496,7 +496,7 @@ public class MainForm : Form
                         previousFileSize = currentFileSize;
                     }
                 }
-                catch (IOException ex)
+                catch (IOException)
                 {
                     if (retries == 0)
                     {
@@ -750,20 +750,68 @@ public class MainForm : Form
         updateForm.Controls.Add(txtReleaseNotes);
 
         // Buttons
-        var btnViewRelease = new Button
+        var btnDownload = new Button
         {
-            Text = "View Release Page",
+            Text = "Download Update",
             Location = new Point(20, 325),
             Size = new Size(140, 30),
             Font = new Font("Segoe UI", 9)
         };
-        btnViewRelease.Click += (s, e) =>
+        btnDownload.Click += async (s, e) =>
         {
             var checker = new UpdateChecker();
-            checker.OpenReleasePage(release.HtmlUrl);
-            updateForm.Close();
+            var zipAsset = checker.FindReleaseZip(release);
+
+            if (zipAsset == null)
+            {
+                MessageBox.Show("No download file found in this release.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            // Show save file dialog
+            var saveDialog = new SaveFileDialog
+            {
+                FileName = zipAsset.Name,
+                Filter = "ZIP files (*.zip)|*.zip|All files (*.*)|*.*",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\Downloads",
+                Title = "Save Update File"
+            };
+
+            if (saveDialog.ShowDialog() == DialogResult.OK)
+            {
+                updateForm.Close();
+
+                // Show progress form
+                var progressForm = new DownloadProgressForm(zipAsset.Name);
+                progressForm.Show();
+
+                var progress = new Progress<DownloadProgress>(p => progressForm.UpdateProgress(p));
+
+                // Download the file
+                var success = await checker.DownloadReleaseAsync(zipAsset.BrowserDownloadUrl, saveDialog.FileName, progress);
+
+                progressForm.Close();
+
+                if (success)
+                {
+                    var result = MessageBox.Show(
+                        $"Update downloaded successfully!\n\nFile saved to:\n{saveDialog.FileName}\n\nWould you like to open the download folder?",
+                        "Download Complete",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Information);
+
+                    if (result == DialogResult.Yes)
+                    {
+                        Process.Start("explorer.exe", $"/select,\"{saveDialog.FileName}\"");
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("Download failed. Please check the log for details.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
         };
-        updateForm.Controls.Add(btnViewRelease);
+        updateForm.Controls.Add(btnDownload);
 
         var btnLater = new Button
         {
@@ -871,6 +919,19 @@ public class MainForm : Form
                 "appsettings.json"
             );
 
+            string defaultSettingsPath = Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory,
+                "appsettings.default.json"
+            );
+
+            // First-run scenario: Create user's appsettings.json from default
+            if (!File.Exists(settingsPath) && File.Exists(defaultSettingsPath))
+            {
+                LogManager.Log("First run detected - creating appsettings.json from defaults");
+                File.Copy(defaultSettingsPath, settingsPath);
+            }
+
+            // Load user settings
             if (File.Exists(settingsPath))
             {
                 string json = File.ReadAllText(settingsPath);
@@ -891,7 +952,7 @@ public class MainForm : Form
             LogManager.Log($"Error loading settings: {ex.Message}", "ERROR");
         }
 
-        LogManager.Log("Using default settings");
+        LogManager.Log("Using hardcoded default settings");
         return new AppSettings
         {
             ServerUrl = "https://garage.mapleleafmakers.com",
@@ -937,7 +998,7 @@ public class AppSettings
 
 public class UploadTracker
 {
-    private HashSet<string> uploadedFiles;
+    private HashSet<string> uploadedFiles = new HashSet<string>();
     private string trackerFilePath;
 
     public UploadTracker()
@@ -1543,5 +1604,66 @@ public class SettingsForm : Form
     public string GetTelemetryFolder()
     {
         return telemetryFolder;
+    }
+}
+
+public class DownloadProgressForm : Form
+{
+    private Label lblStatus;
+    private ProgressBar progressBar;
+    private Label lblProgress;
+
+    public DownloadProgressForm(string filename)
+    {
+        Text = "Downloading Update";
+        Size = new Size(450, 150);
+        StartPosition = FormStartPosition.CenterScreen;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+
+        lblStatus = new Label
+        {
+            Text = $"Downloading: {filename}",
+            Location = new Point(20, 20),
+            Size = new Size(410, 25),
+            Font = new Font("Segoe UI", 9)
+        };
+        this.Controls.Add(lblStatus);
+
+        progressBar = new ProgressBar
+        {
+            Location = new Point(20, 55),
+            Size = new Size(410, 25),
+            Minimum = 0,
+            Maximum = 100
+        };
+        this.Controls.Add(progressBar);
+
+        lblProgress = new Label
+        {
+            Text = "0 MB / 0 MB (0%)",
+            Location = new Point(20, 90),
+            Size = new Size(410, 20),
+            Font = new Font("Segoe UI", 9),
+            TextAlign = ContentAlignment.MiddleCenter
+        };
+        this.Controls.Add(lblProgress);
+    }
+
+    public void UpdateProgress(DownloadProgress progress)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(new Action<DownloadProgress>(UpdateProgress), progress);
+            return;
+        }
+
+        progressBar.Value = Math.Min(progress.PercentComplete, 100);
+
+        double downloadedMB = progress.BytesDownloaded / 1024.0 / 1024.0;
+        double totalMB = progress.TotalBytes / 1024.0 / 1024.0;
+
+        lblProgress.Text = $"{downloadedMB:F1} MB / {totalMB:F1} MB ({progress.PercentComplete}%)";
     }
 }
