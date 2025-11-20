@@ -174,13 +174,17 @@ AUTHENTICATION_BACKENDS = [
 SITE_ID = 1
 
 # Allauth settings
-ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_EMAIL_REQUIRED = False  # Don't require email (no email server configured)
 ACCOUNT_USERNAME_REQUIRED = True
-ACCOUNT_AUTHENTICATION_METHOD = 'username_email'  # Allow login with username or email
-ACCOUNT_EMAIL_VERIFICATION = 'optional'  # Don't require email verification for now
+ACCOUNT_AUTHENTICATION_METHOD = 'username'  # Login with username only
+ACCOUNT_EMAIL_VERIFICATION = 'none'  # Disable email verification (no email server)
 ACCOUNT_SIGNUP_EMAIL_ENTER_TWICE = False
 ACCOUNT_SESSION_REMEMBER = True  # Remember logged-in users
 ACCOUNT_LOGOUT_ON_GET = False  # Require POST to logout (security)
+
+# Email backend - use console backend (logs emails instead of sending)
+# Change to 'django.core.mail.backends.smtp.EmailBackend' when email server is configured
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Login/logout redirects
 LOGIN_REDIRECT_URL = '/'
