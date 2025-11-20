@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Win32;
 
 namespace iRacingTelemetryClient;
 
@@ -931,6 +932,7 @@ public class AppSettings
     public string ApiToken { get; set; } = "";
     public string? TelemetryFolder { get; set; }
     public bool AutoUpload { get; set; } = true;
+    public bool StartWithWindows { get; set; } = false;
 }
 
 public class UploadTracker
@@ -1237,7 +1239,7 @@ public class StatusForm : Form
 public class SettingsForm : Form
 {
     private TextBox txtServerUrl, txtApiToken, txtTelemetryFolder;
-    private CheckBox chkAutoUpload;
+    private CheckBox chkAutoUpload, chkStartWithWindows;
     private Button btnShowToken;
     private AppSettings settings;
     private string telemetryFolder;
@@ -1321,10 +1323,18 @@ public class SettingsForm : Form
             Checked = settings.AutoUpload
         };
 
+        chkStartWithWindows = new CheckBox
+        {
+            Text = "Start with Windows",
+            Location = new Point(130, 170),
+            Size = new Size(300, 25),
+            Checked = IsStartupWithWindowsEnabled()
+        };
+
         var btnTestConnection = new Button
         {
             Text = "Test Connection",
-            Location = new Point(130, 180),
+            Location = new Point(130, 210),
             Size = new Size(150, 35)
         };
         btnTestConnection.Click += BtnTestConnection_Click;
@@ -1332,7 +1342,7 @@ public class SettingsForm : Form
         var btnSave = new Button
         {
             Text = "Save",
-            Location = new Point(260, 260),
+            Location = new Point(260, 290),
             Size = new Size(120, 35),
             DialogResult = DialogResult.OK
         };
@@ -1341,14 +1351,14 @@ public class SettingsForm : Form
         var btnCancel = new Button
         {
             Text = "Cancel",
-            Location = new Point(390, 260),
+            Location = new Point(390, 290),
             Size = new Size(120, 35),
             DialogResult = DialogResult.Cancel
         };
 
         this.Controls.AddRange(new Control[] {
             lblServer, txtServerUrl, lblToken, txtApiToken, btnShowToken,
-            lblFolder, txtTelemetryFolder, btnBrowse, chkAutoUpload, btnTestConnection, btnSave, btnCancel
+            lblFolder, txtTelemetryFolder, btnBrowse, chkAutoUpload, chkStartWithWindows, btnTestConnection, btnSave, btnCancel
         });
 
         this.AcceptButton = btnSave;
@@ -1472,12 +1482,57 @@ public class SettingsForm : Form
         }
     }
 
+    private const string StartupRegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+    private const string AppName = "RidgwayGarageAgent";
+
+    private void SetStartupWithWindows(bool enable)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey, true);
+            if (key == null) return;
+
+            if (enable)
+            {
+                string exePath = Application.ExecutablePath;
+                key.SetValue(AppName, $"\"{exePath}\"");
+                LogManager.Log("Auto-start with Windows enabled");
+            }
+            else
+            {
+                key.DeleteValue(AppName, false);
+                LogManager.Log("Auto-start with Windows disabled");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogManager.Log($"Error setting startup registry: {ex.Message}", "ERROR");
+        }
+    }
+
+    private bool IsStartupWithWindowsEnabled()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey, false);
+            return key?.GetValue(AppName) != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private void BtnSave_Click(object? sender, EventArgs e)
     {
         settings.ServerUrl = txtServerUrl.Text.Trim();
         settings.ApiToken = txtApiToken.Text.Trim();
         settings.AutoUpload = chkAutoUpload.Checked;
+        settings.StartWithWindows = chkStartWithWindows.Checked;
         telemetryFolder = txtTelemetryFolder.Text.Trim();
+
+        // Update Windows startup registry
+        SetStartupWithWindows(settings.StartWithWindows);
     }
 
     public AppSettings GetSettings()
