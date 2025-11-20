@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using iRacingTelemetryClient.Services;
 
 namespace iRacingTelemetryClient;
 
@@ -88,7 +89,7 @@ public class UpdateChecker
 
             if (!response.IsSuccessStatusCode)
             {
-                LogManager.Log($"Failed to check for updates: HTTP {response.StatusCode}", "WARNING");
+                LoggingService.Log($"Failed to check for updates: HTTP {response.StatusCode}", "WARNING");
                 return null;
             }
 
@@ -97,14 +98,14 @@ public class UpdateChecker
 
             if (release == null)
             {
-                LogManager.Log("Failed to parse GitHub release data", "WARNING");
+                LoggingService.Log("Failed to parse GitHub release data", "WARNING");
                 return null;
             }
 
             // Skip pre-releases
             if (release.Prerelease)
             {
-                LogManager.Log($"Latest release {release.TagName} is a pre-release, skipping");
+                LoggingService.Log($"Latest release {release.TagName} is a pre-release, skipping");
                 return null;
             }
 
@@ -112,25 +113,25 @@ public class UpdateChecker
             var releaseVersion = ParseVersion(release.TagName);
             var currentVersion = GetCurrentVersion();
 
-            LogManager.Log($"Current version: {currentVersion}, Latest version: {releaseVersion}");
+            LoggingService.Log($"Current version: {currentVersion}, Latest version: {releaseVersion}");
 
             if (releaseVersion > currentVersion)
             {
-                LogManager.Log($"Update available: {release.TagName}");
+                LoggingService.Log($"Update available: {release.TagName}");
                 return release;
             }
 
-            LogManager.Log("Application is up to date");
+            LoggingService.Log("Application is up to date");
             return null;
         }
         catch (HttpRequestException ex)
         {
-            LogManager.Log($"Network error checking for updates: {ex.Message}", "WARNING");
+            LoggingService.Log($"Network error checking for updates: {ex.Message}", "WARNING");
             return null;
         }
         catch (Exception ex)
         {
-            LogManager.Log($"Error checking for updates: {ex.Message}", "ERROR");
+            LoggingService.Log($"Error checking for updates: {ex.Message}", "ERROR");
             return null;
         }
     }
@@ -151,7 +152,7 @@ public class UpdateChecker
                 return version;
             }
 
-            LogManager.Log($"Failed to parse version string: {versionString}", "WARNING");
+            LoggingService.Log($"Failed to parse version string: {versionString}", "WARNING");
             return new Version(0, 0, 0);
         }
         catch
@@ -176,7 +177,7 @@ public class UpdateChecker
         }
         catch (Exception ex)
         {
-            LogManager.Log($"Failed to open releases page: {ex.Message}", "ERROR");
+            LoggingService.Log($"Failed to open releases page: {ex.Message}", "ERROR");
         }
     }
 
@@ -195,7 +196,7 @@ public class UpdateChecker
         }
         catch (Exception ex)
         {
-            LogManager.Log($"Failed to open release page: {ex.Message}", "ERROR");
+            LoggingService.Log($"Failed to open release page: {ex.Message}", "ERROR");
         }
     }
 
@@ -214,15 +215,15 @@ public class UpdateChecker
     {
         try
         {
-            LogManager.Log($"Starting download from: {downloadUrl}");
-            LogManager.Log($"Destination: {destinationPath}");
+            LoggingService.Log($"Starting download from: {downloadUrl}");
+            LoggingService.Log($"Destination: {destinationPath}");
 
             // Get the file with headers first to read content length
             using var response = await _httpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
 
             var totalBytes = response.Content.Headers.ContentLength ?? 0;
-            LogManager.Log($"File size: {totalBytes / 1024 / 1024:F2} MB");
+            LoggingService.Log($"File size: {totalBytes / 1024 / 1024:F2} MB");
 
             // Create directory if it doesn't exist
             var directory = Path.GetDirectoryName(destinationPath);
@@ -257,12 +258,12 @@ public class UpdateChecker
                 }
             }
 
-            LogManager.Log($"Download complete: {destinationPath}");
+            LoggingService.Log($"Download complete: {destinationPath}");
             return true;
         }
         catch (Exception ex)
         {
-            LogManager.Log($"Download failed: {ex.Message}", "ERROR");
+            LoggingService.Log($"Download failed: {ex.Message}", "ERROR");
             return false;
         }
     }
