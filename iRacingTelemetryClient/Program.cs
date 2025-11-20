@@ -381,7 +381,8 @@ public class MainForm : Form
                 {
                     newFiles++;
                     LogManager.Log($"Found unuploaded file: {Path.GetFileName(file)}");
-                    _ = Task.Run(() => UploadFile(file));
+                    // Don't show notifications during backfill scan (showNotification: false)
+                    _ = Task.Run(() => UploadFile(file, showNotification: false));
                 }
             }
 
@@ -424,7 +425,7 @@ public class MainForm : Form
         await UploadFile(filePath);
     }
 
-    private async Task UploadFile(string filePath)
+    private async Task UploadFile(string filePath, bool showNotification = true)
     {
         // Check if auto-upload is enabled
         if (!settings.AutoUpload)
@@ -452,6 +453,13 @@ public class MainForm : Form
 
         try
         {
+            // Check again if already uploaded (in case another task uploaded while we were waiting)
+            if (uploadTracker.IsUploaded(filePath))
+            {
+                LogManager.Log($"File already uploaded by another task: {Path.GetFileName(filePath)}");
+                return;
+            }
+
             // Wait for file to be fully written and not locked
             // iRacing can take several minutes to finish writing large IBT files (100MB+)
             int maxRetries = 120;
@@ -538,6 +546,10 @@ public class MainForm : Form
             httpClient.DefaultRequestHeaders.Clear();
             httpClient.DefaultRequestHeaders.Add("Authorization", $"Token {settings.ApiToken}");
 
+            // Add original file modification time as header (ISO 8601 format)
+            var fileModTime = fileInfo.LastWriteTimeUtc.ToString("o");
+            httpClient.DefaultRequestHeaders.Add("X-Original-Mtime", fileModTime);
+
             LogManager.Log($"Sending POST request to {uploadUrl}...");
 
             var response = await httpClient.PostAsync(uploadUrl, form);
@@ -549,24 +561,30 @@ public class MainForm : Form
                 uploadTracker.MarkAsUploaded(filePath);
                 LogManager.Log($"Successfully uploaded: {Path.GetFileName(filePath)}");
 
-                BeginInvoke(() =>
+                if (showNotification)
                 {
-                    trayIcon?.ShowBalloonTip(3000, "Upload Complete",
-                        $"Uploaded: {Path.GetFileName(filePath)}",
-                        ToolTipIcon.Info);
-                });
+                    BeginInvoke(() =>
+                    {
+                        trayIcon?.ShowBalloonTip(3000, "Upload Complete",
+                            $"Uploaded: {Path.GetFileName(filePath)}",
+                            ToolTipIcon.Info);
+                    });
+                }
             }
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
                 LogManager.Log($"Upload failed ({response.StatusCode}): {Path.GetFileName(filePath)} - {errorContent}", "ERROR");
 
-                BeginInvoke(() =>
+                if (showNotification)
                 {
-                    trayIcon?.ShowBalloonTip(5000, "Upload Failed",
-                        $"Failed to upload: {Path.GetFileName(filePath)}\n{response.StatusCode}",
-                        ToolTipIcon.Error);
-                });
+                    BeginInvoke(() =>
+                    {
+                        trayIcon?.ShowBalloonTip(5000, "Upload Failed",
+                            $"Failed to upload: {Path.GetFileName(filePath)}\n{response.StatusCode}",
+                            ToolTipIcon.Error);
+                    });
+                }
             }
         }
         catch (TaskCanceledException ex)

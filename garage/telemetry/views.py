@@ -174,14 +174,14 @@ def import_lap_from_data(data, user):
     track, _ = Track.objects.get_or_create(
         name=track_name,
         configuration=track_config,
-        defaults={'name': track_name, 'configuration': track_config}
+        defaults={'name': track_name, 'configuration': track_config, 'background_image_url': ''}
     )
 
     # Get or create Car
     car_name = data['session'].get('car_name', 'Unknown Car')
     car, _ = Car.objects.get_or_create(
         name=car_name,
-        defaults={'name': car_name}
+        defaults={'name': car_name, 'image_url': ''}
     )
 
     # Parse session date

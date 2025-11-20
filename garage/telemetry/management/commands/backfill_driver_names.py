@@ -55,11 +55,11 @@ class Command(BaseCommand):
                 session_info_yaml = session_info_yaml.rstrip(b'\x00').decode(YAML_CODE_PAGE)
                 session_info = yaml.load(session_info_yaml, Loader=YamlSafeLoader)
 
-                if session_info and 'DriverInfo' in session_info:
+                if session_info and 'DriverInfo' in session_info and session_info['DriverInfo']:
                     drivers = session_info['DriverInfo'].get('Drivers', [])
                     if drivers:
                         driver_info = drivers[0]
-                        driver_name = driver_info.get('UserName', '').strip()
+                        driver_name = (driver_info.get('UserName') or '').strip()
 
                         if driver_name:
                             if dry_run:

@@ -64,7 +64,8 @@ class LiveTelemetrySession:
             name=track_name,
             configuration=track_config,
             defaults={
-                'length_km': session_info.get('track_length_km')
+                'length_km': session_info.get('track_length_km'),
+                'background_image_url': ''
             }
         )
 
@@ -72,7 +73,8 @@ class LiveTelemetrySession:
         car, _ = Car.objects.get_or_create(
             name=car_name,
             defaults={
-                'car_class': session_info.get('car_class', '')
+                'car_class': session_info.get('car_class', ''),
+                'image_url': ''
             }
         )
 

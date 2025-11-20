@@ -100,7 +100,7 @@ def parse_ibt_file(self, session_id):
         )
 
         # Auto-detect track if not specified
-        if not session.track and 'WeekendInfo' in session_info:
+        if not session.track and 'WeekendInfo' in session_info and session_info['WeekendInfo']:
             track_name = (session_info['WeekendInfo'].get('TrackDisplayName') or '').strip()
             track_config = (session_info['WeekendInfo'].get('TrackConfigName') or '').strip()
 
@@ -111,14 +111,15 @@ def parse_ibt_file(self, session_id):
                     name=track_name,
                     configuration=track_config if track_config else '',
                     defaults={
-                        'length_km': track_length_clean
+                        'length_km': track_length_clean,
+                        'background_image_url': ''
                     }
                 )
                 session.track = track
                 logger.info(f"Auto-detected track: {track_name} {track_config}")
 
         # Auto-detect car and driver name if not specified
-        if 'DriverInfo' in session_info:
+        if 'DriverInfo' in session_info and session_info['DriverInfo']:
             drivers = session_info['DriverInfo'].get('Drivers', [])
             if drivers:
                 # Get the user's info (index 0 is typically the player)
@@ -138,37 +139,41 @@ def parse_ibt_file(self, session_id):
                         car, created = Car.objects.get_or_create(
                             name=car_name,
                             defaults={
-                                'car_class': car_class
+                                'car_class': car_class,
+                                'image_url': ''
                             }
                         )
                         session.car = car
                         logger.info(f"Auto-detected car: {car_name}")
 
         # Extract session type
-        if 'SessionInfo' in session_info and 'Sessions' in session_info['SessionInfo']:
+        if 'SessionInfo' in session_info and session_info['SessionInfo'] and 'Sessions' in session_info['SessionInfo']:
             sessions = session_info['SessionInfo']['Sessions']
             # Find the session that has telemetry data (usually the last one)
-            for sess in sessions:
-                sess_type = sess.get('SessionType', '').lower()
-                if 'race' in sess_type:
-                    session.session_type = 'race'
-                    break
-                elif 'qualify' in sess_type or 'qual' in sess_type:
-                    session.session_type = 'qualifying'
-                    break
-                elif 'practice' in sess_type:
-                    session.session_type = 'practice'
-                    break
-                elif 'time' in sess_type and 'trial' in sess_type:
-                    session.session_type = 'time_trial'
-                    break
+            if sessions:
+                for sess in sessions:
+                    sess_type = (sess.get('SessionType') or '').lower()
+                    if 'race' in sess_type:
+                        session.session_type = 'race'
+                        break
+                    elif 'qualify' in sess_type or 'qual' in sess_type:
+                        session.session_type = 'qualifying'
+                        break
+                    elif 'practice' in sess_type:
+                        session.session_type = 'practice'
+                        break
+                    elif 'time' in sess_type and 'trial' in sess_type:
+                        session.session_type = 'time_trial'
+                        break
 
         # Extract environmental conditions
-        if 'WeekendInfo' in session_info:
+        if 'WeekendInfo' in session_info and session_info['WeekendInfo']:
             weekend_info = session_info['WeekendInfo']
-            session.air_temp = weekend_info.get('TrackAirTemp', '').replace(' C', '') or None
-            session.track_temp = weekend_info.get('TrackSurfaceTemp', '').replace(' C', '') or None
-            session.weather_type = weekend_info.get('TrackWeatherType', '')
+            air_temp_str = weekend_info.get('TrackAirTemp') or ''
+            session.air_temp = air_temp_str.replace(' C', '') if air_temp_str else None
+            track_temp_str = weekend_info.get('TrackSurfaceTemp') or ''
+            session.track_temp = track_temp_str.replace(' C', '') if track_temp_str else None
+            session.weather_type = weekend_info.get('TrackWeatherType') or ''
 
         session.save()
 
