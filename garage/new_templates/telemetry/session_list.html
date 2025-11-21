@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% load telemetry_filters %}
+
+{% block title %}My Sessions{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <!-- Page Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-4xl font-bold text-neon-cyan mb-2 text-neon-glow">
+                <svg class="w-10 h-10 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                </svg>
+                My Sessions
+            </h1>
+        </div>
+        <a href="{% url 'telemetry:upload' %}" class="btn-neon">
+            <svg class="w-5 h-5 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            Upload New
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="glass-card p-6 corner-brackets mb-6">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div>
+                <label class="form-label">Track</label>
+                <select name="track" class="input-neon">
+                    <option value="">All Tracks</option>
+                    {% for track in tracks %}
+                    <option value="{{ track.id }}" {% if current_track == track.id|stringformat:"s" %}selected{% endif %}>
+                        {{ track.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Car</label>
+                <select name="car" class="input-neon">
+                    <option value="">All Cars</option>
+                    {% for car in cars %}
+                    <option value="{{ car.id }}" {% if current_car == car.id|stringformat:"s" %}selected{% endif %}>
+                        {{ car.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label">Status</label>
+                <select name="status" class="input-neon">
+                    <option value="">All Status</option>
+                    <option value="completed" {% if current_status == "completed" %}selected{% endif %}>Completed</option>
+                    <option value="processing" {% if current_status == "processing" %}selected{% endif %}>Processing</option>
+                    <option value="failed" {% if current_status == "failed" %}selected{% endif %}>Failed</option>
+                </select>
+            </div>
+            <div class="flex items-end gap-2">
+                <button type="submit" class="btn-neon flex-1">
+                    <svg class="w-5 h-5 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                    Filter
+                </button>
+                <a href="{% url 'telemetry:session_list' %}" class="px-6 py-4 rounded-lg font-semibold transition-all duration-300 border-2 border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan min-h-[56px] flex items-center">
+                    Clear
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Sessions -->
+    {% if sessions %}
+    <div class="space-y-4">
+        {% for session in sessions %}
+        <div class="glass-card p-6 hover:shadow-neon-cyan hover:-translate-y-1 transition-all duration-300">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Left Column: Session Info -->
+                <div class="flex flex-col">
+                    <h3 class="text-2xl font-bold text-white mb-3">
+                        {% if session.track %}
+                            {{ session.track.name }}
+                        {% else %}
+                            <span class="text-gray-500">Detecting track...</span>
+                        {% endif %}
+                    </h3>
+                    <div class="text-gray-400 mb-4 space-y-2">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/>
+                            </svg>
+                            {% if session.car %}
+                                <span class="font-medium">{{ session.car.name }}</span>
+                            {% else %}
+                                Detecting car...
+                            {% endif %}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            {{ session.session_date|date:"M d, Y H:i" }}
+                            {% if session.air_temp %}
+                            <span class="ml-auto flex items-center gap-1 {% if session.air_temp < 15 %}text-blue-400{% elif session.air_temp < 25 %}text-green-400{% elif session.air_temp < 35 %}text-ridgway-orange{% else %}text-ridgway-red{% endif %}">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                                </svg>
+                                {{ session.air_temp }}°C
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="flex gap-2 flex-wrap mb-4">
+                        <span class="session-badge-{{ session.session_type }}">{{ session.get_session_type_display }}</span>
+                        {% if session.team %}
+                        <span class="inline-block px-3 py-1 rounded text-xs font-semibold uppercase tracking-wide bg-neon-purple/20 text-neon-purple border border-neon-purple/50">
+                            <svg class="w-3 h-3 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                            </svg>
+                            {{ session.team.name }}
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Status and Actions -->
+                    <div class="mt-auto space-y-2">
+                        {% if session.processing_status == 'completed' %}
+                        <div class="flex items-center justify-between">
+                            <span class="inline-block px-3 py-1 rounded text-xs font-semibold uppercase bg-green-500/20 text-green-400 border border-green-500/50">
+                                Completed
+                            </span>
+                            <form method="post" action="{% url 'telemetry:session_delete' session.pk %}" onsubmit="return confirm('Are you sure you want to delete this session and all its laps?');">
+                                {% csrf_token %}
+                                <button type="submit" class="px-2 py-2 rounded transition-all duration-300 text-gray-500 hover:text-ridgway-red hover:bg-ridgway-red/10" title="Delete session">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                        <a href="{% url 'telemetry:analysis' %}?session={{ session.pk }}" class="block px-4 py-3 rounded-lg font-semibold text-center transition-all duration-300 border-2 border-neon-cyan/50 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 hover:border-neon-cyan">
+                            View All Laps
+                        </a>
+
+                        {% elif session.processing_status == 'processing' %}
+                        <div class="flex items-center justify-between">
+                            <span class="inline-block px-3 py-1 rounded text-xs font-semibold uppercase bg-ridgway-yellow/20 text-ridgway-yellow border border-ridgway-yellow/50 animate-pulse">
+                                Processing...
+                            </span>
+                            <form method="post" action="{% url 'telemetry:session_delete' session.pk %}" onsubmit="return confirm('This session is still processing. Are you sure you want to delete it?');">
+                                {% csrf_token %}
+                                <button type="submit" class="px-2 py-2 rounded transition-all duration-300 text-gray-500 hover:text-ridgway-red hover:bg-ridgway-red/10" title="Delete session">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                        <a href="{% url 'telemetry:analysis' %}?session={{ session.pk }}" class="block px-4 py-3 rounded-lg font-semibold text-center transition-all duration-300 border-2 border-cyber-border text-gray-300 hover:border-neon-cyan hover:text-neon-cyan">
+                            View Laps
+                        </a>
+
+                        {% elif session.processing_status == 'failed' %}
+                        <div class="flex items-center justify-between">
+                            <span class="inline-block px-3 py-1 rounded text-xs font-semibold uppercase bg-ridgway-red/20 text-ridgway-red border border-ridgway-red/50">
+                                Failed
+                            </span>
+                            <form method="post" action="{% url 'telemetry:session_delete' session.pk %}" onsubmit="return confirm('Delete this failed session?');">
+                                {% csrf_token %}
+                                <button type="submit" class="px-2 py-2 rounded transition-all duration-300 text-gray-500 hover:text-ridgway-red hover:bg-ridgway-red/10" title="Delete session">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                        <p class="text-ridgway-red text-sm">{{ session.processing_error|truncatewords:10 }}</p>
+
+                        {% else %}
+                        <div class="flex items-center justify-between">
+                            <span class="inline-block px-3 py-1 rounded text-xs font-semibold uppercase bg-gray-500/20 text-gray-400 border border-gray-500/50">
+                                Pending
+                            </span>
+                            <form method="post" action="{% url 'telemetry:session_delete' session.pk %}" onsubmit="return confirm('Delete this pending session?');">
+                                {% csrf_token %}
+                                <button type="submit" class="px-2 py-2 rounded transition-all duration-300 text-gray-500 hover:text-ridgway-red hover:bg-ridgway-red/10" title="Delete session">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                    </svg>
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Right Column: Laps List -->
+                <div class="flex flex-col border-l border-cyber-border pl-6">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="text-sm font-semibold text-neon-cyan uppercase tracking-wide flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"/>
+                            </svg>
+                            Laps
+                        </h4>
+                        <span class="text-xs text-gray-500">{{ session.valid_laps|length }} valid</span>
+                    </div>
+                    {% if session.valid_laps %}
+                    <div class="grid grid-cols-3 gap-2 flex-1 overflow-y-auto" style="max-height: 200px;">
+                        {% for lap in session.valid_laps %}
+                        <a href="{% url 'telemetry:analysis' %}?lap={{ lap.id }}"
+                           class="flex flex-col px-3 py-2 rounded-lg bg-cyber-dark/50 hover:bg-neon-cyan/20 border border-cyber-border hover:border-neon-cyan transition-all {% if lap.id == session.best_lap.id %}ring-2 ring-neon-cyan{% endif %}"
+                           title="View Lap {{ lap.lap_number }}">
+                            <span class="text-xs font-semibold {% if lap.id == session.best_lap.id %}text-neon-cyan{% else %}text-gray-400{% endif %}">
+                                L{{ lap.lap_number }}
+                            </span>
+                            <span class="text-sm font-mono {% if lap.id == session.best_lap.id %}text-neon-cyan font-bold{% else %}text-gray-300{% endif %}">
+                                {{ lap.lap_time|format_laptime }}
+                            </span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="flex items-center justify-center h-32 text-gray-500">
+                        <p class="text-sm">No valid laps</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <!-- Empty State -->
+    <div class="glass-card p-12 corner-brackets text-center">
+        <svg class="w-24 h-24 text-neon-cyan mx-auto mb-6 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9l6 6m0-6l-6 6"/>
+        </svg>
+        <h3 class="text-2xl font-bold text-white mb-3">No Sessions Found</h3>
+        <p class="text-gray-400 mb-8 max-w-md mx-auto">
+            {% if current_track or current_car or current_status %}
+                Try adjusting your filters or upload new sessions to see them here.
+            {% else %}
+                Start your telemetry journey by uploading your first iRacing session file!
+            {% endif %}
+        </p>
+        <div class="flex gap-4 justify-center flex-wrap">
+            {% if current_track or current_car or current_status %}
+            <a href="{% url 'telemetry:session_list' %}" class="px-6 py-4 rounded-lg font-semibold transition-all duration-300 border-2 border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan">
+                <svg class="w-5 h-5 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+                Clear Filters
+            </a>
+            {% endif %}
+            <a href="{% url 'telemetry:upload' %}" class="btn-neon">
+                <svg class="w-5 h-5 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                Upload Session
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

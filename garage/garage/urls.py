@@ -18,13 +18,19 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
+from telemetry import auth_views
 
 urlpatterns = [
     # Django admin
     path('admin/', admin.site.urls),
 
-    # Django Allauth (authentication and social auth)
-    path('accounts/', include('allauth.urls')),
+    # Custom Authentication URLs (replaces django-allauth)
+    path('login/', auth_views.login_view, name='login'),
+    path('register/', auth_views.register_view, name='register'),
+    path('logout/', auth_views.logout_view, name='logout'),
+
+    # Django Allauth (authentication and social auth) - DEPRECATED, kept for backwards compatibility
+    # path('accounts/', include('allauth.urls')),
 
     # Telemetry app URLs
     path('', include('telemetry.urls')),

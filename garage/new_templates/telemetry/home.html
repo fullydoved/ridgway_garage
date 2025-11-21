@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% load static %}
+{% load telemetry_filters %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="min-h-screen py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        {% if user.is_authenticated %}
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                <!-- Total Sessions -->
+                <div class="glass-card p-6 corner-brackets hover:shadow-neon-cyan transition-all duration-300 hover:-translate-y-1">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <p class="text-gray-400 text-sm uppercase tracking-wide mb-2">Total Sessions</p>
+                            <p class="text-4xl font-bold text-white">{{ stats.total_sessions|default:0 }}</p>
+                        </div>
+                        <div class="w-16 h-16 bg-neon-cyan/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-8 h-8 text-neon-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    {% if sessions_sparkline %}
+                    <div class="mt-4 pt-3 border-t border-cyber-border">
+                        <p class="text-xs text-gray-500 mb-2">Last 12 weeks</p>
+                        {{ sessions_sparkline|safe }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- Total Laps -->
+                <div class="glass-card p-6 corner-brackets hover:shadow-neon-cyan transition-all duration-300 hover:-translate-y-1">
+                    <div class="flex items-center justify-between mb-3">
+                        <div>
+                            <p class="text-gray-400 text-sm uppercase tracking-wide mb-2">Total Laps</p>
+                            <p class="text-4xl font-bold text-white">{{ stats.total_laps|default:0 }}</p>
+                        </div>
+                        <div class="w-16 h-16 bg-ridgway-orange/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-8 h-8 text-ridgway-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    {% if laps_sparkline %}
+                    <div class="mt-4 pt-3 border-t border-cyber-border">
+                        <p class="text-xs text-gray-500 mb-2">Last 12 weeks</p>
+                        {{ laps_sparkline|safe }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Recent Sessions -->
+            {% if recent_sessions %}
+                <div class="mb-8">
+                    <div class="flex items-center justify-between mb-6">
+                        <h2 class="text-2xl font-bold text-neon-cyan">Recent Sessions</h2>
+                        <a href="{% url 'telemetry:session_list' %}" class="text-gray-400 hover:text-neon-cyan transition-colors text-sm">
+                            View All →
+                        </a>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {% for session in recent_sessions %}
+                            <div class="glass-card p-6 corner-brackets hover:shadow-neon-cyan transition-all duration-300 hover:-translate-y-1">
+                                <!-- Session Type Badge -->
+                                <div class="flex items-center justify-between mb-4">
+                                    <span class="session-badge-{{ session.session_type }}">
+                                        {% if session.session_type == 'practice' %}
+                                            Practice
+                                        {% elif session.session_type == 'qualifying' %}
+                                            Qualifying
+                                        {% elif session.session_type == 'race' %}
+                                            Race
+                                        {% elif session.session_type == 'time_trial' %}
+                                            Time Trial
+                                        {% elif session.session_type == 'testing' %}
+                                            Testing
+                                        {% else %}
+                                            Session
+                                        {% endif %}
+                                    </span>
+                                    <span class="text-xs text-gray-500">
+                                        {{ session.session_date|date:"M d, Y" }}
+                                    </span>
+                                </div>
+
+                                <!-- Track and Car -->
+                                <div class="mb-4">
+                                    <h3 class="text-xl font-semibold text-white mb-1">
+                                        {% if session.track %}
+                                            {{ session.track.name }}
+                                        {% else %}
+                                            <span class="text-gray-500">Unknown Track</span>
+                                        {% endif %}
+                                    </h3>
+                                    <p class="text-gray-400 text-sm">
+                                        {% if session.car %}
+                                            {{ session.car.name }}
+                                        {% else %}
+                                            <span class="text-gray-500">Unknown Car</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+
+                                <!-- Stats Row -->
+                                <div class="flex items-center justify-between mb-4 pb-4 border-b border-cyber-border">
+                                    <div class="text-center">
+                                        <p class="text-gray-400 text-xs uppercase mb-1">Laps</p>
+                                        <p class="text-white font-semibold">{{ session.lap_count }}</p>
+                                    </div>
+                                    <div class="text-center">
+                                        <p class="text-gray-400 text-xs uppercase mb-1">Best Time</p>
+                                        <p class="text-neon-cyan font-mono font-semibold">
+                                            {% if session.best_lap %}
+                                                {{ session.best_lap.lap_time|format_laptime }}
+                                            {% else %}
+                                                --:--.---
+                                            {% endif %}
+                                        </p>
+                                    </div>
+                                    <div class="text-center">
+                                        <p class="text-gray-400 text-xs uppercase mb-1">Status</p>
+                                        {% if session.processing_status == 'completed' %}
+                                            <span class="text-green-400">✓</span>
+                                        {% elif session.processing_status == 'processing' %}
+                                            <span class="text-yellow-400">⟳</span>
+                                        {% else %}
+                                            <span class="text-gray-500">•</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <!-- Analyze Button -->
+                                <a href="{% url 'telemetry:analysis' %}?lap={{ session.best_lap.id }}" class="btn-neon w-full text-center block">
+                                    Analyze Session
+                                </a>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% else %}
+                <!-- Empty State -->
+                <div class="glass-card p-12 text-center corner-brackets">
+                    <div class="w-24 h-24 bg-neon-cyan/20 rounded-lg flex items-center justify-center mx-auto mb-6">
+                        <svg class="w-12 h-12 text-neon-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-white mb-3">No Sessions Yet</h2>
+                    <p class="text-gray-400 mb-6 max-w-md mx-auto">
+                        Upload your first iRacing telemetry file to start analyzing your lap times and improving your performance.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                        <a href="{% url 'telemetry:upload' %}" class="btn-neon">
+                            Upload Session
+                        </a>
+                        <a href="https://github.com/fullydoved/ridgway_garage/releases/latest"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           class="px-6 py-4 rounded-lg font-semibold border-2 border-cyber-border hover:border-neon-cyan bg-cyber-dark/50 text-white transition-all duration-300">
+                            Download Windows Client
+                        </a>
+                    </div>
+                </div>
+            {% endif %}
+
+        {% else %}
+            <!-- Not Authenticated - Welcome Page -->
+            <div class="text-center py-20">
+                <h1 class="text-5xl font-bold text-neon-glow mb-4">
+                    Ridgway Garage
+                </h1>
+                <p class="text-2xl text-gray-300 mb-2">
+                    iRacing Telemetry Analysis
+                </p>
+                <p class="text-gray-400 mb-12 max-w-2xl mx-auto">
+                    Upload, analyze, and compare your iRacing telemetry data. Track your progress, find faster lines, and improve your lap times.
+                </p>
+
+                <div class="flex gap-4 justify-center mb-16">
+                    <a href="{% url 'register' %}" class="btn-neon">
+                        Create Account
+                    </a>
+                    <a href="{% url 'login' %}" class="px-6 py-4 rounded-lg font-semibold border-2 border-neon-cyan/50 hover:border-neon-cyan bg-transparent text-white transition-all duration-300">
+                        Sign In
+                    </a>
+                </div>
+
+                <!-- Feature Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                    <div class="glass-card p-6">
+                        <div class="w-16 h-16 bg-neon-cyan/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-neon-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-semibold text-white mb-2">Lap Analysis</h3>
+                        <p class="text-gray-400 text-sm">
+                            Interactive telemetry charts showing speed, throttle, brake, and more across every lap.
+                        </p>
+                    </div>
+
+                    <div class="glass-card p-6">
+                        <div class="w-16 h-16 bg-ridgway-orange/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-ridgway-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-semibold text-white mb-2">Lap Comparison</h3>
+                        <p class="text-gray-400 text-sm">
+                            Compare multiple laps side-by-side to find where you're gaining or losing time.
+                        </p>
+                    </div>
+
+                    <div class="glass-card p-6">
+                        <div class="w-16 h-16 bg-neon-purple/20 rounded-lg flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-neon-purple" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-semibold text-white mb-2">Team Collaboration</h3>
+                        <p class="text-gray-400 text-sm">
+                            Share telemetry with teammates and learn from each other's driving techniques.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

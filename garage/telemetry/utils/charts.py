@@ -1265,3 +1265,193 @@ def create_lap_time_progression_chart(sessions_data):
         'displayModeBar': True,
         'modeBarButtonsToRemove': ['toImage']
     })
+
+
+def create_sessions_sparkline(user, weeks=12):
+    """
+    Create a minimal sparkline bar chart showing sessions per week.
+
+    Args:
+        user: User object to get sessions for
+        weeks: Number of weeks to show (default 12)
+
+    Returns:
+        HTML string for embedding in template, or None if no data
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+    from django.db.models import Count
+    from django.db.models.functions import TruncWeek
+    from ..models import Session
+
+    # Calculate the cutoff date
+    cutoff_date = timezone.now() - timedelta(weeks=weeks)
+
+    # Get sessions per week from database
+    sessions_data = list(Session.objects.filter(
+        driver=user,
+        session_date__gte=cutoff_date
+    ).annotate(
+        week=TruncWeek('session_date')
+    ).values('week').annotate(
+        count=Count('id')
+    ).order_by('week'))
+
+    # Create a complete week range with zero-filling
+    all_weeks = []
+    week_counts = {}
+
+    # Build a dict of existing data
+    for item in sessions_data:
+        week_counts[item['week']] = item['count']
+
+    # Generate all weeks in range
+    current_date = timezone.now()
+    for i in range(weeks - 1, -1, -1):
+        week_start = (current_date - timedelta(weeks=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        # Truncate to week start (Monday)
+        week_start = week_start - timedelta(days=week_start.weekday())
+        all_weeks.append({
+            'week': week_start,
+            'count': week_counts.get(week_start, 0)
+        })
+
+    # Extract data for plotting
+    weeks_list = [w['week'] for w in all_weeks]
+    counts = [w['count'] for w in all_weeks]
+
+    # Create sparkline bar chart
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        x=weeks_list,
+        y=counts,
+        marker=dict(
+            color='rgba(0, 212, 255, 0.6)',  # Neon cyan with transparency
+            line=dict(width=0)
+        ),
+        hovertemplate='<b>Week of %{x|%b %d}</b><br>Sessions: %{y}<extra></extra>'
+    ))
+
+    fig.update_layout(
+        template='plotly_dark',
+        height=100,
+        margin=dict(l=0, r=0, t=0, b=0),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(
+            showgrid=False,
+            showticklabels=False,
+            zeroline=False
+        ),
+        yaxis=dict(
+            showgrid=False,
+            showticklabels=False,
+            zeroline=False
+        ),
+        hovermode='x',
+        bargap=0.2
+    )
+
+    return fig.to_html(
+        div_id='sessions-sparkline',
+        include_plotlyjs=False,
+        config={'displayModeBar': False}
+    )
+
+
+def create_laps_sparkline(user, weeks=12):
+    """
+    Create a minimal sparkline area chart showing laps per week.
+
+    Args:
+        user: User object to get laps for
+        weeks: Number of weeks to show (default 12)
+
+    Returns:
+        HTML string for embedding in template, or None if no data
+    """
+    from datetime import timedelta
+    from django.utils import timezone
+    from django.db.models import Count
+    from django.db.models.functions import TruncWeek
+    from ..models import Lap
+
+    # Calculate the cutoff date
+    cutoff_date = timezone.now() - timedelta(weeks=weeks)
+
+    # Get laps per week from database (via session relationship)
+    laps_data = list(Lap.objects.filter(
+        session__driver=user,
+        session__session_date__gte=cutoff_date
+    ).annotate(
+        week=TruncWeek('session__session_date')
+    ).values('week').annotate(
+        count=Count('id')
+    ).order_by('week'))
+
+    # Create a complete week range with zero-filling
+    all_weeks = []
+    week_counts = {}
+
+    # Build a dict of existing data
+    for item in laps_data:
+        week_counts[item['week']] = item['count']
+
+    # Generate all weeks in range
+    current_date = timezone.now()
+    for i in range(weeks - 1, -1, -1):
+        week_start = (current_date - timedelta(weeks=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        # Truncate to week start (Monday)
+        week_start = week_start - timedelta(days=week_start.weekday())
+        all_weeks.append({
+            'week': week_start,
+            'count': week_counts.get(week_start, 0)
+        })
+
+    # Extract data for plotting
+    weeks_list = [w['week'] for w in all_weeks]
+    counts = [w['count'] for w in all_weeks]
+
+    # Create sparkline area chart
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=weeks_list,
+        y=counts,
+        mode='lines+markers',
+        line=dict(
+            color='rgba(245, 158, 11, 0.8)',  # Orange with slight transparency
+            width=2
+        ),
+        marker=dict(
+            size=4,
+            color='rgba(245, 158, 11, 0.8)'
+        ),
+        hovertemplate='<b>Week of %{x|%b %d}</b><br>Laps: %{y}<extra></extra>'
+    ))
+
+    fig.update_layout(
+        template='plotly_dark',
+        height=100,
+        margin=dict(l=0, r=0, t=0, b=0),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        xaxis=dict(
+            showgrid=False,
+            showticklabels=False,
+            zeroline=False
+        ),
+        yaxis=dict(
+            showgrid=False,
+            showticklabels=False,
+            zeroline=False
+        ),
+        hovermode='x'
+    )
+
+    return fig.to_html(
+        div_id='laps-sparkline',
+        include_plotlyjs=False,
+        config={'displayModeBar': False}
+    )

@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Create Account{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center px-4 py-12">
+    <div class="max-w-lg w-full">
+        <!-- Card with Corner Brackets -->
+        <div class="glass-card p-10 corner-brackets">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-neon-glow mb-2">
+                    Create Account
+                </h1>
+                <p class="text-gray-400">
+                    Join Ridgway Garage and start analyzing your laps
+                </p>
+            </div>
+
+            <!-- Form -->
+            <form method="post" class="space-y-6">
+                {% csrf_token %}
+
+                <!-- Form Errors -->
+                {% if form.non_field_errors %}
+                    <div class="bg-ridgway-red/20 border border-ridgway-red/50 rounded-lg p-4">
+                        {% for error in form.non_field_errors %}
+                            <p class="text-ridgway-red text-sm">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                <!-- Username Field -->
+                <div>
+                    <label for="{{ form.username.id_for_label }}" class="form-label">
+                        Username
+                    </label>
+                    {{ form.username }}
+                    {% if form.username.errors %}
+                        {% for error in form.username.errors %}
+                            <p class="form-error">{{ error }}</p>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <!-- Email Field -->
+                <div>
+                    <label for="{{ form.email.id_for_label }}" class="form-label">
+                        Email
+                    </label>
+                    {{ form.email }}
+                    {% if form.email.errors %}
+                        {% for error in form.email.errors %}
+                            <p class="form-error">{{ error }}</p>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <!-- Password Field -->
+                <div>
+                    <label for="{{ form.password.id_for_label }}" class="form-label">
+                        Password
+                    </label>
+                    {{ form.password }}
+                    {% if form.password.errors %}
+                        {% for error in form.password.errors %}
+                            <p class="form-error">{{ error }}</p>
+                        {% endfor %}
+                    {% else %}
+                        <p class="form-help">Minimum 8 characters</p>
+                    {% endif %}
+                </div>
+
+                <!-- Confirm Password Field -->
+                <div>
+                    <label for="{{ form.password_confirm.id_for_label }}" class="form-label">
+                        Confirm Password
+                    </label>
+                    {{ form.password_confirm }}
+                    {% if form.password_confirm.errors %}
+                        {% for error in form.password_confirm.errors %}
+                            <p class="form-error">{{ error }}</p>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+
+                <!-- Submit Button -->
+                <div>
+                    <button type="submit" class="w-full btn-neon">
+                        Create Account
+                    </button>
+                </div>
+            </form>
+
+            <!-- Divider -->
+            <div class="cyber-divider my-8"></div>
+
+            <!-- Login Link -->
+            <div class="text-center">
+                <p class="text-gray-400 text-sm">
+                    Already have an account?
+                    <a href="{% url 'login' %}" class="text-neon-cyan hover:text-neon-cyan/80 font-semibold transition-colors">
+                        Sign In
+                    </a>
+                </p>
+            </div>
+        </div>
+
+        <!-- Decorative Grid Dots -->
+        <div class="absolute top-1/4 left-10 grid-dot animation-delay-100"></div>
+        <div class="absolute top-1/3 right-20 grid-dot animation-delay-200"></div>
+        <div class="absolute bottom-1/4 left-20 grid-dot animation-delay-300"></div>
+        <div class="absolute bottom-1/3 right-10 grid-dot"></div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // Client-side password match validation
+    const passwordField = document.getElementById('{{ form.password.id_for_label }}');
+    const confirmField = document.getElementById('{{ form.password_confirm.id_for_label }}');
+
+    function validatePasswordMatch() {
+        if (confirmField.value && passwordField.value !== confirmField.value) {
+            confirmField.setCustomValidity('Passwords do not match');
+        } else {
+            confirmField.setCustomValidity('');
+        }
+    }
+
+    if (passwordField && confirmField) {
+        passwordField.addEventListener('input', validatePasswordMatch);
+        confirmField.addEventListener('input', validatePasswordMatch);
+    }
+</script>
+{% endblock %}
+{% endblock %}

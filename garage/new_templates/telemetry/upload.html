@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Telemetry - Ridgway Garage{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <!-- Page Header -->
+    <div class="flex items-start mb-8">
+        <a href="{% url 'telemetry:home' %}" class="px-4 py-4 rounded-lg font-semibold transition-all duration-300 border-2 border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan mr-4 min-h-[56px] flex items-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+        </a>
+        <div>
+            <h1 class="text-4xl font-bold text-neon-cyan mb-2 text-neon-glow">
+                <svg class="w-10 h-10 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                </svg>
+                Upload Telemetry
+            </h1>
+            <p class="text-gray-400">Upload an iRacing telemetry file (.ibt)</p>
+        </div>
+    </div>
+
+    <!-- Upload Form -->
+    <div class="glass-card p-8 corner-brackets">
+        <form method="post" enctype="multipart/form-data" id="uploadForm">
+            {% csrf_token %}
+
+            <!-- File Upload Dropzone -->
+            <div class="mb-8">
+                <label class="form-label">Telemetry File *</label>
+                <div class="upload-dropzone border-2 border-dashed border-cyber-border rounded-lg p-12 text-center transition-all duration-300 hover:border-neon-cyan hover:bg-neon-cyan/5 cursor-pointer" id="dropzone">
+                    <svg class="w-16 h-16 mx-auto text-neon-cyan mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
+                    <h5 class="text-xl font-semibold text-white mb-2">Drag & Drop IBT File Here</h5>
+                    <p class="text-gray-400 mb-4">or click to browse</p>
+                    <input type="file"
+                           name="ibt_file"
+                           id="id_ibt_file"
+                           class="hidden"
+                           accept=".ibt,.IBT"
+                           required>
+                    <div id="fileInfo" class="mt-6 hidden">
+                        <div class="glass-card p-4 border-2 border-neon-cyan bg-neon-cyan/10">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <svg class="w-6 h-6 text-neon-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                    </svg>
+                                    <div>
+                                        <strong id="fileName" class="text-white block"></strong>
+                                        <span id="fileSize" class="text-gray-400 text-sm"></span>
+                                    </div>
+                                </div>
+                                <button type="button" class="text-gray-400 hover:text-ridgway-red transition-colors p-2" id="clearFile">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% if form.ibt_file.help_text %}
+                <p class="form-help mt-2">{{ form.ibt_file.help_text }}</p>
+                {% endif %}
+                {% if form.ibt_file.errors %}
+                <div class="form-error mt-2">
+                    {{ form.ibt_file.errors }}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Team Selection (Optional) -->
+            <div class="mb-8">
+                <label for="{{ form.team.id_for_label }}" class="form-label">
+                    Team (Optional)
+                </label>
+                {{ form.team }}
+                {% if form.team.help_text %}
+                <p class="form-help mt-2">{{ form.team.help_text }}</p>
+                {% endif %}
+                {% if form.team.errors %}
+                <div class="form-error mt-2">{{ form.team.errors }}</div>
+                {% endif %}
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="flex gap-4">
+                <button type="submit" class="btn-neon" id="submitBtn">
+                    <svg class="w-5 h-5 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
+                    Upload & Process
+                </button>
+                <a href="{% url 'telemetry:home' %}" class="px-6 py-4 rounded-lg font-semibold transition-all duration-300 border-2 border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan min-h-[56px] flex items-center">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Info Cards -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+        <!-- File Location Card -->
+        <div class="glass-card p-6 border-2 border-neon-cyan/30 hover:border-neon-cyan transition-all duration-300">
+            <div class="flex items-center gap-3 mb-3">
+                <svg class="w-6 h-6 text-neon-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <h6 class="text-neon-cyan font-semibold text-lg">File Location</h6>
+            </div>
+            <p class="text-gray-300 text-sm leading-relaxed">
+                IBT files are located in your iRacing directory:<br>
+                <code class="text-ridgway-orange bg-cyber-darkest px-2 py-1 rounded mt-1 inline-block">Documents/iRacing/telemetry/[car]/</code>
+            </p>
+        </div>
+
+        <!-- Auto-Detection Card -->
+        <div class="glass-card p-6 border-2 border-green-500/30 hover:border-green-500 transition-all duration-300">
+            <div class="flex items-center gap-3 mb-3">
+                <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                <h6 class="text-green-400 font-semibold text-lg">Auto-Detection</h6>
+            </div>
+            <p class="text-gray-300 text-sm leading-relaxed">
+                Track, car, and session type are automatically extracted from your IBT file. No manual entry needed!
+            </p>
+        </div>
+
+        <!-- Processing Time Card -->
+        <div class="glass-card p-6 border-2 border-ridgway-yellow/30 hover:border-ridgway-yellow transition-all duration-300">
+            <div class="flex items-center gap-3 mb-3">
+                <svg class="w-6 h-6 text-ridgway-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <h6 class="text-ridgway-yellow font-semibold text-lg">Processing Time</h6>
+            </div>
+            <p class="text-gray-300 text-sm leading-relaxed">
+                Large files may take several minutes to process. You can monitor the status from the dashboard.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('id_ibt_file');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const fileSize = document.getElementById('fileSize');
+    const clearBtn = document.getElementById('clearFile');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Click to browse
+    dropzone.addEventListener('click', function(e) {
+        if (e.target !== clearBtn && !clearBtn.contains(e.target)) {
+            fileInput.click();
+        }
+    });
+
+    // Drag and drop
+    dropzone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropzone.classList.add('border-neon-cyan', 'bg-neon-cyan/10');
+        dropzone.classList.remove('border-cyber-border');
+    });
+
+    dropzone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        dropzone.classList.remove('border-neon-cyan', 'bg-neon-cyan/10');
+        dropzone.classList.add('border-cyber-border');
+    });
+
+    dropzone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropzone.classList.remove('border-neon-cyan', 'bg-neon-cyan/10');
+        dropzone.classList.add('border-cyber-border');
+
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            handleFileSelect();
+        }
+    });
+
+    // File input change
+    fileInput.addEventListener('change', handleFileSelect);
+
+    function handleFileSelect() {
+        const file = fileInput.files[0];
+        if (file) {
+            fileName.textContent = file.name;
+            fileSize.textContent = '(' + formatFileSize(file.size) + ')';
+            fileInfo.classList.remove('hidden');
+        }
+    }
+
+    // Clear file
+    clearBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        fileInput.value = '';
+        fileInfo.classList.add('hidden');
+    });
+
+    // Form submission
+    document.getElementById('uploadForm').addEventListener('submit', function() {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<svg class="w-5 h-5 inline-block mr-2 -mt-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>Uploading...';
+    });
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+});
+</script>
+{% endblock %}

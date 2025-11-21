@@ -29,25 +29,14 @@ from ..views_main import (
     session_list,
     session_detail,
     upload,
-    lap_detail,
-    lap_compare,
     session_delete,
 
     # Lap export/import
     lap_export,
-    lap_import,
-    protocol_import,
     lap_share_to_discord,
-
-    # System update views
-    system_update_check,
-    system_update_page,
-    system_update_trigger,
-    system_update_history,
 
     # User settings
     user_settings,
-    api_token_view,
     leaderboards,
 
     # API endpoints
@@ -78,25 +67,14 @@ __all__ = [
     'session_list',
     'session_detail',
     'upload',
-    'lap_detail',
-    'lap_compare',
     'session_delete',
 
     # Lap export/import
     'lap_export',
-    'lap_import',
-    'protocol_import',
     'lap_share_to_discord',
-
-    # System update views
-    'system_update_check',
-    'system_update_page',
-    'system_update_trigger',
-    'system_update_history',
 
     # User settings
     'user_settings',
-    'api_token_view',
     'leaderboards',
 
     # API endpoints

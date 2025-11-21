@@ -70,7 +70,6 @@ websocket_urlpatterns = [
 
     # Authenticated routes for web browsers (require login)
     re_path(r'ws/telemetry/processing/(?P<session_id>\d+)/$', AuthMiddlewareStack(consumers.TelemetryProcessingConsumer.as_asgi())),
-    re_path(r'ws/system/update/$', AuthMiddlewareStack(consumers.SystemUpdateConsumer.as_asgi())),
     re_path(r'ws/telemetry/watch/(?P<session_id>\d+)/$', AuthMiddlewareStack(consumers.LiveSessionViewerConsumer.as_asgi())),
 ]
 

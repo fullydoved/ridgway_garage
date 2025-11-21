@@ -63,8 +63,6 @@ INSTALLED_APPS = [
     # Third-party apps
     'channels',
     'django_celery_results',  # Optional: store Celery results in database
-    'crispy_forms',
-    'crispy_bootstrap5',
     # Note: We use Leaflet.js directly in templates, not django-leaflet (requires GDAL)
 
     # Django Allauth for authentication
@@ -95,7 +93,7 @@ ROOT_URLCONF = 'garage.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'telemetry' / 'templates'],
+        'DIRS': [BASE_DIR / 'new_templates', BASE_DIR / 'telemetry' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -227,6 +225,9 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',  # Root static folder for Tailwind CSS output
+]
 
 # Media files (User uploaded content)
 MEDIA_URL = '/media/'
