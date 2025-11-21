@@ -4,7 +4,7 @@ services:
     image: postgres:16-alpine
     container_name: ridgway_garage_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - /mnt/user/appdata/ridgway_garage/postgres:/var/lib/postgresql/data
     environment:
       - POSTGRES_DB=${DB_NAME:-ridgway_garage}
       - POSTGRES_USER=${DB_USER:-postgres}
@@ -25,7 +25,7 @@ services:
     image: redis:7-alpine
     container_name: ridgway_garage_redis
     volumes:
-      - redis_data:/data
+      - /mnt/user/appdata/ridgway_garage/redis:/data
     # Ports are NOT exposed to host - only accessible within Docker network
     # This prevents conflicts with system Redis installations
     # To access: docker compose exec redis redis-cli
@@ -45,8 +45,8 @@ services:
     command: daphne -b 0.0.0.0 -p 8000 garage.asgi:application
     volumes:
       - ./garage:/app
-      - media_files:/app/media
-      - static_files:/app/staticfiles
+      - /mnt/user/appdata/ridgway_garage/media:/app/media
+      - /mnt/user/appdata/ridgway_garage/static:/app/staticfiles
     expose:
       - "8000"
     env_file:
@@ -72,8 +72,8 @@ services:
     container_name: ridgway_garage_nginx
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - static_files:/app/staticfiles:ro
-      - media_files:/app/media:ro
+      - /mnt/user/appdata/ridgway_garage/static:/app/staticfiles:ro
+      - /mnt/user/appdata/ridgway_garage/media:/app/media:ro
     ports:
       - "42069:80"
     depends_on:
@@ -89,7 +89,7 @@ services:
     command: celery -A garage worker -l info --concurrency=2
     volumes:
       - ./garage:/app
-      - media_files:/app/media
+      - /mnt/user/appdata/ridgway_garage/media:/app/media
     env_file:
       - .env
     environment:
@@ -131,11 +131,13 @@ services:
       - ridgway_network
     restart: unless-stopped
 
-volumes:
-  postgres_data:
-  redis_data:
-  media_files:
-  static_files:
+# Named volumes replaced with bind mounts to Unraid array
+# All data now stored in /mnt/user/appdata/ridgway_garage/
+# volumes:
+#   postgres_data:
+#   redis_data:
+#   media_files:
+#   static_files:
 
 networks:
   ridgway_network:
