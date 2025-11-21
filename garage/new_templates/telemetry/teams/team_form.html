@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-8">
+    <!-- Back Button -->
+    <div class="mb-6">
+        <a href="{% if team %}{% url 'telemetry:team_detail' team.pk %}{% else %}{% url 'telemetry:team_list' %}{% endif %}" class="inline-flex items-center gap-2 text-gray-400 hover:text-neon-cyan transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back
+        </a>
+    </div>
+
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h1 class="text-4xl font-bold mb-2">
+            <svg class="w-10 h-10 inline-block mr-2 -mt-1 text-neon-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <span class="text-logo-gradient">{{ page_title }}</span>
+        </h1>
+    </div>
+
+    <!-- Form -->
+    <div class="glass-card p-8 corner-brackets">
+        <form method="post">
+            {% csrf_token %}
+
+            <!-- Team Name -->
+            <div class="mb-6">
+                <label for="{{ form.name.id_for_label }}" class="form-label">
+                    Team Name <span class="text-ridgway-red">*</span>
+                </label>
+                <input type="text"
+                       name="{{ form.name.name }}"
+                       id="{{ form.name.id_for_label }}"
+                       class="input-neon {% if form.name.errors %}border-ridgway-red{% endif %}"
+                       value="{{ form.name.value|default:'' }}"
+                       required>
+                {% if form.name.help_text %}
+                <p class="form-help">{{ form.name.help_text }}</p>
+                {% endif %}
+                {% if form.name.errors %}
+                <p class="form-error">{{ form.name.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Description -->
+            <div class="mb-6">
+                <label for="{{ form.description.id_for_label }}" class="form-label">
+                    Description
+                </label>
+                <textarea name="{{ form.description.name }}"
+                          id="{{ form.description.id_for_label }}"
+                          class="input-neon {% if form.description.errors %}border-ridgway-red{% endif %}"
+                          rows="4">{{ form.description.value|default:'' }}</textarea>
+                {% if form.description.help_text %}
+                <p class="form-help">{{ form.description.help_text }}</p>
+                {% endif %}
+                {% if form.description.errors %}
+                <p class="form-error">{{ form.description.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Discord Webhook URL -->
+            <div class="mb-6">
+                <label for="{{ form.discord_webhook_url.id_for_label }}" class="form-label flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20.317 4.492c-1.53-.69-3.17-1.2-4.885-1.49a.075.075 0 00-.079.036c-.21.369-.444.85-.608 1.23a18.566 18.566 0 00-5.487 0 12.36 12.36 0 00-.617-1.23A.077.077 0 008.562 3c-1.714.29-3.354.8-4.885 1.491a.07.07 0 00-.032.027C.533 9.093-.32 13.555.099 17.961a.08.08 0 00.031.055 20.03 20.03 0 005.993 2.98.078.078 0 00.084-.026 13.83 13.83 0 001.226-1.963.074.074 0 00-.041-.104 13.201 13.201 0 01-1.872-.878.075.075 0 01-.008-.125c.126-.093.252-.19.372-.287a.075.075 0 01.078-.01c3.927 1.764 8.18 1.764 12.061 0a.075.075 0 01.079.009c.12.098.245.195.372.288a.075.075 0 01-.006.125c-.598.344-1.22.635-1.873.877a.075.075 0 00-.041.105c.36.687.772 1.341 1.225 1.962a.077.077 0 00.084.028 19.963 19.963 0 006.002-2.981.076.076 0 00.032-.054c.5-5.094-.838-9.52-3.549-13.442a.06.06 0 00-.031-.028zM8.02 15.278c-1.182 0-2.157-1.069-2.157-2.38 0-1.312.956-2.38 2.157-2.38 1.21 0 2.176 1.077 2.157 2.38 0 1.312-.956 2.38-2.157 2.38zm7.975 0c-1.183 0-2.157-1.069-2.157-2.38 0-1.312.955-2.38 2.157-2.38 1.21 0 2.176 1.077 2.157 2.38 0 1.312-.946 2.38-2.157 2.38z"/>
+                    </svg>
+                    Discord Webhook URL
+                </label>
+                <input type="url"
+                       name="{{ form.discord_webhook_url.name }}"
+                       id="{{ form.discord_webhook_url.id_for_label }}"
+                       class="input-neon {% if form.discord_webhook_url.errors %}border-ridgway-red{% endif %}"
+                       value="{{ form.discord_webhook_url.value|default:'' }}"
+                       placeholder="https://discord.com/api/webhooks/...">
+                {% if form.discord_webhook_url.help_text %}
+                <p class="form-help">{{ form.discord_webhook_url.help_text }}</p>
+                {% endif %}
+                {% if form.discord_webhook_url.errors %}
+                <p class="form-error">{{ form.discord_webhook_url.errors.0 }}</p>
+                {% endif %}
+
+                <!-- Discord Setup Instructions -->
+                <div class="mt-4 p-4 rounded-lg border-2 border-neon-cyan/30 bg-neon-cyan/10">
+                    <div class="flex gap-3">
+                        <svg class="w-6 h-6 text-neon-cyan flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                        </svg>
+                        <div>
+                            <strong class="text-neon-cyan block mb-2">How to get a Discord webhook URL:</strong>
+                            <ol class="text-gray-300 text-sm space-y-1 list-decimal list-inside">
+                                <li>Go to your Discord server settings</li>
+                                <li>Navigate to "Integrations" → "Webhooks"</li>
+                                <li>Click "New Webhook"</li>
+                                <li>Name it (e.g., "Ridgway Garage")</li>
+                                <li>Select the channel for lap sharing</li>
+                                <li>Copy the webhook URL and paste it above</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Checkboxes -->
+            <div class="space-y-4 mb-8">
+                <!-- Is Public -->
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-cyber-dark/30 border border-cyber-border">
+                    <input type="checkbox"
+                           name="{{ form.is_public.name }}"
+                           id="{{ form.is_public.id_for_label }}"
+                           class="mt-1 w-5 h-5 rounded border-2 border-cyber-border bg-cyber-dark text-neon-cyan focus:ring-2 focus:ring-neon-cyan/30"
+                           {% if form.is_public.value %}checked{% endif %}>
+                    <div class="flex-1">
+                        <label for="{{ form.is_public.id_for_label }}" class="text-white font-semibold cursor-pointer block mb-1">
+                            {{ form.is_public.label }}
+                        </label>
+                        {% if form.is_public.help_text %}
+                        <p class="text-gray-400 text-sm">{{ form.is_public.help_text }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Allow Join Requests -->
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-cyber-dark/30 border border-cyber-border">
+                    <input type="checkbox"
+                           name="{{ form.allow_join_requests.name }}"
+                           id="{{ form.allow_join_requests.id_for_label }}"
+                           class="mt-1 w-5 h-5 rounded border-2 border-cyber-border bg-cyber-dark text-neon-cyan focus:ring-2 focus:ring-neon-cyan/30"
+                           {% if form.allow_join_requests.value %}checked{% endif %}>
+                    <div class="flex-1">
+                        <label for="{{ form.allow_join_requests.id_for_label }}" class="text-white font-semibold cursor-pointer block mb-1">
+                            {{ form.allow_join_requests.label }}
+                        </label>
+                        {% if form.allow_join_requests.help_text %}
+                        <p class="text-gray-400 text-sm">{{ form.allow_join_requests.help_text }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex gap-4">
+                <button type="submit" class="btn-neon flex-1 sm:flex-none whitespace-nowrap">
+                    {% if team %}Save Changes{% else %}Create Team{% endif %}
+                </button>
+                <a href="{% if team %}{% url 'telemetry:team_detail' team.pk %}{% else %}{% url 'telemetry:team_list' %}{% endif %}"
+                   class="px-6 py-4 rounded-lg font-semibold transition-all duration-300 border-2 border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan flex items-center justify-center whitespace-nowrap">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

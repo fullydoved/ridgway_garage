@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Teams{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <!-- Page Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-4xl font-bold mb-2">
+                <span class="text-logo-gradient">Teams</span>
+            </h1>
+            <p class="text-gray-400 text-lg">Collaborate with teammates and share telemetry data</p>
+        </div>
+        <a href="{% url 'telemetry:team_create' %}" class="btn-neon whitespace-nowrap">
+            Create Team
+        </a>
+    </div>
+
+    {% if user_teams %}
+    <!-- My Teams Section -->
+    <div class="mb-12">
+        <h2 class="text-2xl font-bold text-neon-cyan mb-6 flex items-center gap-2">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+            </svg>
+            My Teams
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for team in user_teams %}
+            <div class="glass-card p-6 corner-brackets hover:-translate-y-1 transition-all duration-300">
+                <div class="flex justify-between items-start mb-4">
+                    <h3 class="text-xl font-bold text-white">{{ team.name }}</h3>
+                    {% if team.owner == user %}
+                    <span class="inline-block px-3 py-1 rounded text-xs font-semibold bg-ridgway-yellow/20 text-ridgway-yellow border border-ridgway-yellow/50">
+                        Owner
+                    </span>
+                    {% endif %}
+                </div>
+
+                <p class="text-gray-400 mb-4 min-h-[3rem]">
+                    {{ team.description|default:"No description provided"|truncatewords:20 }}
+                </p>
+
+                <div class="flex items-center gap-4 text-sm text-gray-400 mb-4">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                        </svg>
+                        <span>{{ team.members.count }} member{{ team.members.count|pluralize }}</span>
+                    </div>
+                    {% if team.discord_webhook_url %}
+                    <div class="flex items-center gap-2 text-green-400">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M20.317 4.492c-1.53-.69-3.17-1.2-4.885-1.49a.075.075 0 00-.079.036c-.21.369-.444.85-.608 1.23a18.566 18.566 0 00-5.487 0 12.36 12.36 0 00-.617-1.23A.077.077 0 008.562 3c-1.714.29-3.354.8-4.885 1.491a.07.07 0 00-.032.027C.533 9.093-.32 13.555.099 17.961a.08.08 0 00.031.055 20.03 20.03 0 005.993 2.98.078.078 0 00.084-.026 13.83 13.83 0 001.226-1.963.074.074 0 00-.041-.104 13.201 13.201 0 01-1.872-.878.075.075 0 01-.008-.125c.126-.093.252-.19.372-.287a.075.075 0 01.078-.01c3.927 1.764 8.18 1.764 12.061 0a.075.075 0 01.079.009c.12.098.245.195.372.288a.075.075 0 01-.006.125c-.598.344-1.22.635-1.873.877a.075.075 0 00-.041.105c.36.687.772 1.341 1.225 1.962a.077.077 0 00.084.028 19.963 19.963 0 006.002-2.981.076.076 0 00.032-.054c.5-5.094-.838-9.52-3.549-13.442a.06.06 0 00-.031-.028zM8.02 15.278c-1.182 0-2.157-1.069-2.157-2.38 0-1.312.956-2.38 2.157-2.38 1.21 0 2.176 1.077 2.157 2.38 0 1.312-.956 2.38-2.157 2.38zm7.975 0c-1.183 0-2.157-1.069-2.157-2.38 0-1.312.955-2.38 2.157-2.38 1.21 0 2.176 1.077 2.157 2.38 0 1.312-.946 2.38-2.157 2.38z"/>
+                        </svg>
+                        <span>Discord</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="flex gap-2">
+                    <a href="{% url 'telemetry:team_detail' team.pk %}" class="flex-1 text-center px-4 py-2 rounded-lg font-semibold transition-all duration-300 border-2 border-neon-cyan/50 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 hover:border-neon-cyan whitespace-nowrap">
+                        View
+                    </a>
+                    {% if team.owner == user %}
+                    <a href="{% url 'telemetry:team_edit' team.pk %}" class="px-4 py-2 rounded-lg transition-all duration-300 border-2 border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan whitespace-nowrap">
+                        Edit
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <!-- No Teams Message -->
+    <div class="glass-card p-12 text-center corner-brackets mb-12">
+        <svg class="w-24 h-24 mx-auto mb-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+        </svg>
+        <h3 class="text-2xl font-bold text-white mb-3">No Teams Yet</h3>
+        <p class="text-gray-400 mb-8 max-w-md mx-auto">
+            You're not a member of any teams yet. Create your own team or join a public team below!
+        </p>
+        <a href="{% url 'telemetry:team_create' %}" class="btn-neon inline-block whitespace-nowrap">
+            Create Your First Team
+        </a>
+    </div>
+    {% endif %}
+
+    {% if public_teams %}
+    <!-- Public Teams Section -->
+    <div>
+        <h2 class="text-2xl font-bold text-neon-cyan mb-6 flex items-center gap-2">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Public Teams
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for team in public_teams %}
+            <div class="glass-card p-6 corner-brackets hover:-translate-y-1 transition-all duration-300">
+                <h3 class="text-xl font-bold text-white mb-4">{{ team.name }}</h3>
+
+                <p class="text-gray-400 mb-4 min-h-[3rem]">
+                    {{ team.description|default:"No description provided"|truncatewords:20 }}
+                </p>
+
+                <div class="flex items-center gap-2 text-sm text-gray-400 mb-4">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+                    </svg>
+                    <span>{{ team.members.count }} member{{ team.members.count|pluralize }}</span>
+                </div>
+
+                <a href="{% url 'telemetry:team_detail' team.pk %}" class="block text-center px-4 py-2 rounded-lg font-semibold transition-all duration-300 border-2 border-neon-cyan/50 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 hover:border-neon-cyan w-full whitespace-nowrap">
+                    View Team
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
