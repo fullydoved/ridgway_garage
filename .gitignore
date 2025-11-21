@@ -6,7 +6,8 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
+# Ignore Python package dist, but allow garage/static/dist/
+# dist/
 downloads/
 eggs/
 .eggs/
@@ -34,7 +35,8 @@ db.sqlite3
 db.sqlite3-journal
 /media
 /staticfiles
-/static
+# Allow garage/static/ directory but ignore Django's collectstatic output
+# /static
 
 # Environment Variables
 .env
