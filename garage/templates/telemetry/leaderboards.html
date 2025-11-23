@@ -5,99 +5,6 @@
 
 {% block extra_head %}
 <style>
-    /* Podium styling */
-    .podium-container {
-        display: flex;
-        align-items: flex-end;
-        justify-content: center;
-        gap: 1.5rem;
-        min-height: 300px;
-        padding: 2rem 0;
-    }
-
-    .podium-place {
-        flex: 1;
-        max-width: 250px;
-        text-align: center;
-    }
-
-    .podium-platform {
-        border-radius: 0.5rem;
-        padding: 1.5rem 1rem;
-        transition: all 0.3s ease;
-        position: relative;
-        overflow: hidden;
-    }
-
-    .podium-place.first .podium-platform {
-        height: 220px;
-        background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 193, 7, 0.1));
-        border: 2px solid rgba(255, 215, 0, 0.5);
-        box-shadow: 0 0 30px rgba(255, 215, 0, 0.3);
-    }
-
-    .podium-place.second .podium-platform {
-        height: 180px;
-        background: linear-gradient(135deg, rgba(192, 192, 192, 0.2), rgba(169, 169, 169, 0.1));
-        border: 2px solid rgba(192, 192, 192, 0.5);
-        box-shadow: 0 0 20px rgba(192, 192, 192, 0.3);
-    }
-
-    .podium-place.third .podium-platform {
-        height: 140px;
-        background: linear-gradient(135deg, rgba(205, 127, 50, 0.2), rgba(184, 115, 51, 0.1));
-        border: 2px solid rgba(205, 127, 50, 0.5);
-        box-shadow: 0 0 20px rgba(205, 127, 50, 0.3);
-    }
-
-    .podium-platform:hover {
-        transform: translateY(-5px);
-    }
-
-    .podium-rank {
-        font-size: 2rem;
-        font-weight: bold;
-        margin-bottom: 0.5rem;
-    }
-
-    .podium-place.first .podium-rank {
-        color: #ffd700;
-        text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
-        font-size: 2.5rem;
-    }
-
-    .podium-place.second .podium-rank {
-        color: #c0c0c0;
-        text-shadow: 0 0 10px rgba(192, 192, 192, 0.8);
-    }
-
-    .podium-place.third .podium-rank {
-        color: #cd7f32;
-        text-shadow: 0 0 10px rgba(205, 127, 50, 0.8);
-    }
-
-    .podium-driver {
-        font-size: 1.125rem;
-        font-weight: 600;
-        color: white;
-        margin-bottom: 0.75rem;
-    }
-
-    .podium-time {
-        font-size: 1.5rem;
-        font-weight: bold;
-        font-family: 'Courier New', monospace;
-        color: #00d9ff;
-        margin-bottom: 0.75rem;
-        text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
-    }
-
-    .podium-details {
-        font-size: 0.875rem;
-        color: #9ca3af;
-        line-height: 1.5;
-    }
-
     /* User row highlight */
     .leaderboard-user-row {
         background: rgba(0, 217, 255, 0.1);
@@ -167,71 +74,6 @@
             </div>
         </form>
     </div>
-
-    <!-- Podium (Top 3) -->
-    {% if leaderboard_entries|length >= 3 %}
-    <div class="glass-card p-6 corner-brackets mb-6">
-        <div class="podium-container">
-            <!-- Second Place -->
-            <div class="podium-place second">
-                <div class="podium-platform">
-                    <div class="podium-rank">2</div>
-                    <div class="podium-driver">
-                        <svg class="w-5 h-5 inline-block mr-1 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        {{ leaderboard_entries.1.driver }}
-                    </div>
-                    <div class="podium-time">{{ leaderboard_entries.1.lap_time|format_laptime }}</div>
-                    <div class="podium-details">
-                        {{ leaderboard_entries.1.track }}<br>
-                        {{ leaderboard_entries.1.car }}
-                    </div>
-                </div>
-            </div>
-
-            <!-- First Place -->
-            <div class="podium-place first">
-                <div class="podium-platform">
-                    <div class="podium-rank">
-                        <svg class="w-12 h-12 inline-block" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
-                        </svg>
-                    </div>
-                    <div class="podium-driver">
-                        <svg class="w-5 h-5 inline-block mr-1 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        {{ leaderboard_entries.0.driver }}
-                    </div>
-                    <div class="podium-time">{{ leaderboard_entries.0.lap_time|format_laptime }}</div>
-                    <div class="podium-details">
-                        {{ leaderboard_entries.0.track }}<br>
-                        {{ leaderboard_entries.0.car }}
-                    </div>
-                </div>
-            </div>
-
-            <!-- Third Place -->
-            <div class="podium-place third">
-                <div class="podium-platform">
-                    <div class="podium-rank">3</div>
-                    <div class="podium-driver">
-                        <svg class="w-5 h-5 inline-block mr-1 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        {{ leaderboard_entries.2.driver }}
-                    </div>
-                    <div class="podium-time">{{ leaderboard_entries.2.lap_time|format_laptime }}</div>
-                    <div class="podium-details">
-                        {{ leaderboard_entries.2.track }}<br>
-                        {{ leaderboard_entries.2.car }}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
 
     <!-- Leaderboard Table -->
     <div class="glass-card corner-brackets overflow-hidden">
@@ -330,42 +172,46 @@
         {% else %}
         <!-- Empty State -->
         <div class="p-12 text-center">
-            <svg class="w-24 h-24 mx-auto mb-6 opacity-50" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
-                <path class="text-ridgway-red" d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2"/>
-            </svg>
-            <h3 class="text-2xl font-bold text-white mb-3">
-                {% if search or selected_track or selected_car %}
+            {% if not selected_track and not selected_car %}
+                <!-- No filters selected -->
+                <svg class="w-24 h-24 mx-auto mb-6 text-neon-cyan opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                <h3 class="text-2xl font-bold text-white mb-3">
+                    Select a Track or Car
+                </h3>
+                <p class="text-gray-400 mb-8 max-w-md mx-auto">
+                    Choose a track or car from the filters above to view leaderboards for that specific combination.
+                </p>
+            {% else %}
+                <!-- Filters selected but no results -->
+                <svg class="w-24 h-24 mx-auto mb-6 opacity-50" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
+                    <path class="text-ridgway-red" d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2"/>
+                </svg>
+                <h3 class="text-2xl font-bold text-white mb-3">
                     No Results Found
-                {% else %}
-                    No Lap Times Yet
-                {% endif %}
-            </h3>
-            <p class="text-gray-400 mb-8 max-w-md mx-auto">
-                {% if search or selected_track or selected_car %}
+                </h3>
+                <p class="text-gray-400 mb-8 max-w-md mx-auto">
                     No lap times match your current filters. Try broadening your search or upload more sessions.
-                {% else %}
-                    Start racing and upload your telemetry to compete on the leaderboards!
-                {% endif %}
-            </p>
-            <div class="flex gap-4 justify-center flex-wrap">
-                {% if search or selected_track or selected_car %}
-                <a href="{% url 'telemetry:leaderboards' %}" class="px-6 py-4 rounded-lg font-semibold transition-all duration-300 border-2 border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan">
-                    <svg class="w-5 h-5 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                    Clear Filters
-                </a>
-                {% endif %}
-                {% if user.is_authenticated %}
-                <a href="{% url 'telemetry:upload' %}" class="btn-neon">
-                    <svg class="w-5 h-5 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                    </svg>
-                    Upload Telemetry
-                </a>
-                {% endif %}
-            </div>
+                </p>
+                <div class="flex gap-4 justify-center flex-wrap">
+                    <a href="{% url 'telemetry:leaderboards' %}" class="px-6 py-4 rounded-lg font-semibold transition-all duration-300 border-2 border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan">
+                        <svg class="w-5 h-5 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                        Clear Filters
+                    </a>
+                    {% if user.is_authenticated %}
+                    <a href="{% url 'telemetry:upload' %}" class="btn-neon">
+                        <svg class="w-5 h-5 inline-block mr-2 -mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                        </svg>
+                        Upload Telemetry
+                    </a>
+                    {% endif %}
+                </div>
+            {% endif %}
         </div>
         {% endif %}
     </div>

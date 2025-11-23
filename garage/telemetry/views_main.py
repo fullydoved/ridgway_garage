@@ -922,79 +922,81 @@ def leaderboards(request):
     # We want the fastest lap for each driver on each track/car combo
     leaderboard_entries = []
 
-    # Get all track/car combinations that have laps
-    combinations = Lap.objects.filter(
-        is_valid=True,
-        lap_time__gt=0  # Exclude laps with 0 or negative lap times
-    ).values('session__track', 'session__car').annotate(
-        lap_count=Count('id')
-    ).filter(lap_count__gt=0)
-
-    # Apply filters
-    if track_filter:
-        combinations = combinations.filter(session__track__id=track_filter)
-    if car_filter:
-        combinations = combinations.filter(session__car__id=car_filter)
-
-    # For each combination, get the best lap for each driver
-    for combo in combinations:
-        track_id = combo['session__track']
-        car_id = combo['session__car']
-
-        if not track_id or not car_id:
-            continue
-
-        # Get best lap for each driver for this track/car combo
-        best_laps = Lap.objects.filter(
-            session__track_id=track_id,
-            session__car_id=car_id,
+    # Only show data if at least one filter (track or car) is selected
+    if track_filter or car_filter:
+        # Get all track/car combinations that have laps
+        combinations = Lap.objects.filter(
             is_valid=True,
             lap_time__gt=0  # Exclude laps with 0 or negative lap times
-        ).select_related(
-            'session__driver',
-            'session__track',
-            'session__car',
-            'session__team'
-        ).values(
-            'session__driver',
-            'session__driver__username',
-            'session__track__name',
-            'session__track__configuration',
-            'session__car__name'
-        ).annotate(
-            best_time=Min('lap_time')
-        ).order_by('best_time')
+        ).values('session__track', 'session__car').annotate(
+            lap_count=Count('id')
+        ).filter(lap_count__gt=0)
 
-        # Apply search filter
-        if search:
-            best_laps = best_laps.filter(
-                Q(session__driver__username__icontains=search) |
-                Q(session__track__name__icontains=search) |
-                Q(session__car__name__icontains=search)
-            )
+        # Apply filters
+        if track_filter:
+            combinations = combinations.filter(session__track__id=track_filter)
+        if car_filter:
+            combinations = combinations.filter(session__car__id=car_filter)
 
-        for lap_data in best_laps:
-            # Get the actual lap object for the link
-            actual_lap = Lap.objects.filter(
-                session__driver_id=lap_data['session__driver'],
+        # For each combination, get the best lap for each driver
+        for combo in combinations:
+            track_id = combo['session__track']
+            car_id = combo['session__car']
+
+            if not track_id or not car_id:
+                continue
+
+            # Get best lap for each driver for this track/car combo
+            best_laps = Lap.objects.filter(
                 session__track_id=track_id,
                 session__car_id=car_id,
-                lap_time=lap_data['best_time'],
-                is_valid=True
-            ).select_related('session').first()
+                is_valid=True,
+                lap_time__gt=0  # Exclude laps with 0 or negative lap times
+            ).select_related(
+                'session__driver',
+                'session__track',
+                'session__car',
+                'session__team'
+            ).values(
+                'session__driver',
+                'session__driver__username',
+                'session__track__name',
+                'session__track__configuration',
+                'session__car__name'
+            ).annotate(
+                best_time=Min('lap_time')
+            ).order_by('best_time')
 
-            if actual_lap:
-                track_name = lap_data['session__track__name']
-                if lap_data['session__track__configuration']:
-                    track_name += f" - {lap_data['session__track__configuration']}"
+            # Apply search filter
+            if search:
+                best_laps = best_laps.filter(
+                    Q(session__driver__username__icontains=search) |
+                    Q(session__track__name__icontains=search) |
+                    Q(session__car__name__icontains=search)
+                )
 
-                leaderboard_entries.append({
-                    'driver': lap_data['session__driver__username'],
-                    'track': track_name,
-                    'car': lap_data['session__car__name'],
-                    'lap_time': lap_data['best_time'],
-                    'lap': actual_lap,
-                })
+            for lap_data in best_laps:
+                # Get the actual lap object for the link
+                actual_lap = Lap.objects.filter(
+                    session__driver_id=lap_data['session__driver'],
+                    session__track_id=track_id,
+                    session__car_id=car_id,
+                    lap_time=lap_data['best_time'],
+                    is_valid=True
+                ).select_related('session').first()
+
+                if actual_lap:
+                    track_name = lap_data['session__track__name']
+                    if lap_data['session__track__configuration']:
+                        track_name += f" - {lap_data['session__track__configuration']}"
+
+                    leaderboard_entries.append({
+                        'driver': lap_data['session__driver__username'],
+                        'track': track_name,
+                        'car': lap_data['session__car__name'],
+                        'lap_time': lap_data['best_time'],
+                        'lap': actual_lap,
+                    })
 
     # Get unique tracks and cars for filters
     tracks = Track.objects.filter(
