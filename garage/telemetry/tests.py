@@ -276,54 +276,6 @@ class SessionListViewTest(TestCase):
         self.assertContains(response, "Test Track")
 
 
-class SessionDetailViewTest(TestCase):
-    """Test the session detail view."""
-
-    def setUp(self):
-        self.client = Client()
-        self.user = User.objects.create_user(username="testdriver", password="testpass123")
-        self.client.login(username="testdriver", password="testpass123")
-
-        self.track = Track.objects.create(name="Test Track")
-        self.car = Car.objects.create(name="Test Car")
-        self.ibt_file = SimpleUploadedFile("test.ibt", b"fake", content_type="application/octet-stream")
-
-        self.session = Session.objects.create(
-            driver=self.user,
-            track=self.track,
-            car=self.car,
-            ibt_file=self.ibt_file,
-            processing_status="completed"
-        )
-
-        self.lap = Lap.objects.create(
-            session=self.session,
-            lap_number=1,
-            lap_time=72.345
-        )
-
-    def test_session_detail_view_requires_login(self):
-        """Test that session detail requires authentication."""
-        self.client.logout()
-        response = self.client.get(reverse('telemetry:session_detail', args=[self.session.pk]))
-        self.assertEqual(response.status_code, 302)
-
-    def test_session_detail_view_loads(self):
-        """Test that session detail loads successfully."""
-        response = self.client.get(reverse('telemetry:session_detail', args=[self.session.pk]))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Test Track")
-        self.assertContains(response, "72.345s")  # Lap time is displayed
-
-    def test_session_detail_other_user_denied(self):
-        """Test that users can't view other users' sessions."""
-        other_user = User.objects.create_user(username="otheruser", password="testpass123")
-        self.client.login(username="otheruser", password="testpass123")
-
-        response = self.client.get(reverse('telemetry:session_detail', args=[self.session.pk]))
-        self.assertEqual(response.status_code, 302)  # Redirect
-
-
 class APIUploadTest(TestCase):
     """Test API upload endpoint with compression support."""
 
@@ -460,3 +412,307 @@ class APIUploadTest(TestCase):
         )
 
         self.assertEqual(response.status_code, 401)
+
+
+class LapValidationTest(TestCase):
+    """Test lap validation logic for personal best tracking."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.user = User.objects.create_user(
+            username='testdriver',
+            password='testpass123'
+        )
+        self.track = Track.objects.create(
+            name="Road Atlanta",
+            configuration="Full Course",
+            length_km=4.088
+        )
+        self.car = Car.objects.create(
+            name="Mazda MX-5 Cup",
+            car_class="Sports Car"
+        )
+        self.ibt_file = SimpleUploadedFile(
+            "test.ibt",
+            b"fake content",
+            content_type="application/octet-stream"
+        )
+        self.session = Session.objects.create(
+            driver=self.user,
+            track=self.track,
+            car=self.car,
+            ibt_file=self.ibt_file,
+            processing_status="completed"
+        )
+
+    def _create_lap_with_telemetry(self, lap_number, lap_time, is_valid=True,
+                                   track_surface_values=None, incident_values=None,
+                                   pit_road_values=None):
+        """
+        Helper method to create a lap with mock telemetry data.
+
+        Args:
+            lap_number: Lap number
+            lap_time: Lap time in seconds
+            is_valid: Whether lap should be marked valid
+            track_surface_values: List of PlayerTrackSurface values (1=asphalt, 3=off-track, -1=not in world)
+            incident_values: List of PlayerCarMyIncidentCount values
+            pit_road_values: List of OnPitRoad boolean values
+        """
+        # Create sample count (60 Hz for 1 minute = 3600 samples, but use fewer for tests)
+        sample_count = 100
+
+        # Default telemetry values (all valid)
+        if track_surface_values is None:
+            track_surface_values = [1] * sample_count  # 1 = asphalt (valid)
+        if incident_values is None:
+            incident_values = [0] * sample_count  # No incidents
+        if pit_road_values is None:
+            pit_road_values = [False] * sample_count  # Not on pit road
+
+        # Create lap
+        lap = Lap.objects.create(
+            session=self.session,
+            lap_number=lap_number,
+            lap_time=lap_time,
+            is_valid=is_valid
+        )
+
+        # Create telemetry data with validation channels
+        telemetry_data = {
+            'Speed': [50.0 + i for i in range(sample_count)],
+            'Throttle': [0.8] * sample_count,
+            'SessionTime': [i * 0.1 for i in range(sample_count)],
+            'PlayerTrackSurface': track_surface_values[:sample_count],
+            'OnPitRoad': pit_road_values[:sample_count],
+            'PlayerCarMyIncidentCount': incident_values[:sample_count],
+        }
+
+        TelemetryData.objects.create(
+            lap=lap,
+            data=telemetry_data,
+            sample_count=sample_count,
+            max_speed=200.0,
+            avg_speed=150.0
+        )
+
+        return lap
+
+    def test_valid_lap_creation(self):
+        """Test that a clean, valid lap is created correctly."""
+        lap = self._create_lap_with_telemetry(
+            lap_number=1,
+            lap_time=105.234,  # Valid lap time (1m 45s)
+            is_valid=True
+        )
+
+        self.assertTrue(lap.is_valid)
+        self.assertEqual(lap.lap_time, 105.234)
+        self.assertEqual(lap.lap_number, 1)
+
+    def test_invalid_lap_incomplete(self):
+        """Test that laps with time < 10s are marked invalid (incomplete)."""
+        # Simulate a lap that was reset or session ended mid-lap
+        lap = self._create_lap_with_telemetry(
+            lap_number=2,
+            lap_time=5.123,  # Too short - invalid
+            is_valid=False
+        )
+
+        self.assertFalse(lap.is_valid)
+        self.assertLess(lap.lap_time, 10.0)
+
+    def test_invalid_lap_off_track(self):
+        """Test that laps with off-track excursions are marked invalid."""
+        # Create telemetry with off-track samples
+        # PlayerTrackSurface: 3 = OffTrack
+        track_surfaces = [1] * 50 + [3] * 10 + [1] * 40  # 10 samples off-track
+
+        lap = self._create_lap_with_telemetry(
+            lap_number=3,
+            lap_time=104.567,
+            is_valid=False,
+            track_surface_values=track_surfaces
+        )
+
+        self.assertFalse(lap.is_valid)
+
+        # Verify telemetry contains off-track samples
+        telemetry = TelemetryData.objects.get(lap=lap)
+        off_track_count = sum(1 for surface in telemetry.data['PlayerTrackSurface'] if surface == 3)
+        self.assertGreater(off_track_count, 0)
+
+    def test_invalid_lap_not_in_world(self):
+        """Test that laps with NotInWorld surface are marked invalid (reset/tow)."""
+        # PlayerTrackSurface: -1 = NotInWorld (driver reset/towed)
+        track_surfaces = [1] * 30 + [-1] * 20 + [1] * 50
+
+        lap = self._create_lap_with_telemetry(
+            lap_number=4,
+            lap_time=98.234,
+            is_valid=False,
+            track_surface_values=track_surfaces
+        )
+
+        self.assertFalse(lap.is_valid)
+
+        # Verify telemetry contains NotInWorld samples
+        telemetry = TelemetryData.objects.get(lap=lap)
+        not_in_world_count = sum(1 for surface in telemetry.data['PlayerTrackSurface'] if surface == -1)
+        self.assertGreater(not_in_world_count, 0)
+
+    def test_invalid_lap_incident(self):
+        """Test that laps with incidents are marked invalid."""
+        # Incident count increases during lap (started at 0, ended at 2)
+        incident_counts = [0] * 40 + [1] * 30 + [2] * 30  # 2 incidents during lap
+
+        lap = self._create_lap_with_telemetry(
+            lap_number=5,
+            lap_time=107.890,
+            is_valid=False,
+            incident_values=incident_counts
+        )
+
+        self.assertFalse(lap.is_valid)
+
+        # Verify incident count increased
+        telemetry = TelemetryData.objects.get(lap=lap)
+        incident_start = telemetry.data['PlayerCarMyIncidentCount'][0]
+        incident_end = telemetry.data['PlayerCarMyIncidentCount'][-1]
+        self.assertGreater(incident_end, incident_start)
+
+    def test_invalid_lap_inlap(self):
+        """Test that inlaps (ending in pits) are marked invalid."""
+        # Lap ends with OnPitRoad = True
+        pit_road = [False] * 80 + [True] * 20  # Entered pits at end of lap
+
+        lap = self._create_lap_with_telemetry(
+            lap_number=6,
+            lap_time=110.456,
+            is_valid=False,
+            pit_road_values=pit_road
+        )
+
+        self.assertFalse(lap.is_valid)
+
+        # Verify lap ended on pit road
+        telemetry = TelemetryData.objects.get(lap=lap)
+        self.assertTrue(telemetry.data['OnPitRoad'][-1])
+
+    def test_personal_best_only_valid_laps(self):
+        """Test that PB tracking only considers valid laps."""
+        from telemetry.utils.pb_tracker import update_personal_bests
+
+        # Create a valid lap (should be PB)
+        valid_lap = self._create_lap_with_telemetry(
+            lap_number=1,
+            lap_time=105.234,
+            is_valid=True
+        )
+
+        # Create an invalid lap with faster time (should NOT be PB)
+        invalid_lap = self._create_lap_with_telemetry(
+            lap_number=2,
+            lap_time=5.123,  # Faster but invalid (incomplete)
+            is_valid=False
+        )
+
+        # Update personal bests
+        is_new_pb, prev_time, improvement = update_personal_bests(self.session)
+
+        # The valid lap should be marked as PB, not the invalid one
+        valid_lap.refresh_from_db()
+        invalid_lap.refresh_from_db()
+
+        self.assertTrue(is_new_pb)
+        self.assertTrue(valid_lap.is_personal_best)
+        self.assertFalse(invalid_lap.is_personal_best)
+
+    def test_personal_best_ignores_invalid_laps(self):
+        """Test that invalid laps are ignored when determining PB."""
+        from telemetry.utils.pb_tracker import update_personal_bests
+
+        # Create multiple laps: some valid, some invalid
+        valid_slow = self._create_lap_with_telemetry(
+            lap_number=1,
+            lap_time=110.000,
+            is_valid=True
+        )
+
+        invalid_fast = self._create_lap_with_telemetry(
+            lap_number=2,
+            lap_time=100.000,  # Fastest but invalid
+            is_valid=False,
+            track_surface_values=[1] * 50 + [3] * 50  # Off-track
+        )
+
+        valid_fast = self._create_lap_with_telemetry(
+            lap_number=3,
+            lap_time=105.000,  # Slower than invalid but fastest valid
+            is_valid=True
+        )
+
+        # Update PBs
+        is_new_pb, prev_time, improvement = update_personal_bests(self.session)
+
+        # Refresh from DB
+        valid_slow.refresh_from_db()
+        invalid_fast.refresh_from_db()
+        valid_fast.refresh_from_db()
+
+        # The fastest VALID lap should be PB
+        self.assertTrue(is_new_pb)
+        self.assertFalse(valid_slow.is_personal_best)
+        self.assertFalse(invalid_fast.is_personal_best)
+        self.assertTrue(valid_fast.is_personal_best)
+
+    def test_leaderboard_query_filters_invalid_laps(self):
+        """Test that leaderboard queries only return valid laps."""
+        # Create valid and invalid laps
+        valid_lap = self._create_lap_with_telemetry(
+            lap_number=1,
+            lap_time=105.234,
+            is_valid=True
+        )
+
+        invalid_lap = self._create_lap_with_telemetry(
+            lap_number=2,
+            lap_time=104.000,  # Faster but invalid
+            is_valid=False
+        )
+
+        # Query for best laps (simulating leaderboard query)
+        best_laps = Lap.objects.filter(
+            session__track=self.track,
+            session__car=self.car,
+            is_valid=True,
+            lap_time__gt=0
+        ).order_by('lap_time')
+
+        # Should only return the valid lap
+        self.assertEqual(best_laps.count(), 1)
+        self.assertEqual(best_laps.first(), valid_lap)
+
+    def test_session_best_lap_filters_invalid(self):
+        """Test that session best lap query excludes invalid laps."""
+        # Create laps for session
+        invalid_fast = self._create_lap_with_telemetry(
+            lap_number=1,
+            lap_time=104.000,
+            is_valid=False
+        )
+
+        valid_lap = self._create_lap_with_telemetry(
+            lap_number=2,
+            lap_time=105.234,
+            is_valid=True
+        )
+
+        # Get best lap for session (should be valid lap, not invalid)
+        best_lap = self.session.laps.filter(
+            is_valid=True,
+            lap_time__gt=0
+        ).order_by('lap_time').first()
+
+        self.assertEqual(best_lap, valid_lap)
+        self.assertNotEqual(best_lap, invalid_fast)

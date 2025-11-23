@@ -27,7 +27,6 @@ from ..views_main import (
     home,
     dashboard_analysis,
     session_list,
-    session_detail,
     upload,
     session_delete,
 
@@ -65,7 +64,6 @@ __all__ = [
     'home',
     'dashboard_analysis',
     'session_list',
-    'session_detail',
     'upload',
     'session_delete',
 

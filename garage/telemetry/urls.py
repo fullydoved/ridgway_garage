@@ -14,7 +14,6 @@ urlpatterns = [
 
     # Session management
     path('sessions/', views.session_list, name='session_list'),
-    path('sessions/<int:pk>/', views.session_detail, name='session_detail'),
     path('sessions/<int:pk>/delete/', views.session_delete, name='session_delete'),
 
     # Upload

@@ -39,7 +39,8 @@ def update_personal_bests(session):
 
     # Get fastest valid lap from this session (exclude lap 0 and invalid laps)
     session_best = session.laps.filter(
-        lap_time__gt=0
+        lap_time__gt=0,
+        is_valid=True
     ).exclude(
         lap_number=0
     ).order_by('lap_time').first()
@@ -54,7 +55,8 @@ def update_personal_bests(session):
         session__driver=driver,
         session__track=track,
         session__car=car,
-        lap_time__gt=0
+        lap_time__gt=0,
+        is_valid=True
     ).exclude(
         session=session
     ).order_by('lap_time').first()

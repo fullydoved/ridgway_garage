@@ -222,6 +222,10 @@ def parse_ibt_file(self, session_id):
             'Roll', 'Pitch', 'Yaw',
             # Rotation Rates (rad/s)
             'RollRate', 'PitchRate', 'YawRate',
+            # Lap validation channels
+            'PlayerTrackSurface',  # Track surface type (-1=NotInWorld, 0=Undefined, 1-2=Asphalt, 3=OffTrack)
+            'OnPitRoad',  # Boolean indicating if on pit road
+            'PlayerCarMyIncidentCount',  # Total incident count for player
         ]
 
         # Extract data for each channel using get_all(key)
@@ -297,12 +301,55 @@ def parse_ibt_file(self, session_id):
                     max_speed = 0
                     avg_speed = 0
 
+                # Lap validation logic
+                is_valid = True
+                invalid_reason = None
+
+                # Check 1: Incomplete lap (lap time is 0 or suspiciously short)
+                # A legitimate lap should be at least 10 seconds (even on short ovals)
+                if lap_time < 10.0:
+                    is_valid = False
+                    invalid_reason = f"Incomplete lap (time: {lap_time:.3f}s)"
+                    logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
+
+                # Check 2: Off-track detection
+                # PlayerTrackSurface: -1 = NotInWorld, 3 = OffTrack (both invalid)
+                if is_valid and 'PlayerTrackSurface' in lap_telemetry:
+                    track_surfaces = lap_telemetry['PlayerTrackSurface']
+                    off_track_samples = sum(1 for surface in track_surfaces if surface in [-1, 3])
+                    if off_track_samples > 0:
+                        is_valid = False
+                        invalid_reason = f"Off-track violation ({off_track_samples} samples)"
+                        logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
+
+                # Check 3: Incident detection
+                # If incident count increased during the lap, mark as invalid
+                if is_valid and 'PlayerCarMyIncidentCount' in lap_telemetry:
+                    incident_counts = lap_telemetry['PlayerCarMyIncidentCount']
+                    if len(incident_counts) > 1:
+                        incident_start = incident_counts[0]
+                        incident_end = incident_counts[-1]
+                        if incident_end > incident_start:
+                            incidents_this_lap = incident_end - incident_start
+                            is_valid = False
+                            invalid_reason = f"Incident during lap ({incidents_this_lap}x)"
+                            logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
+
+                # Check 4: Inlap detection (lap ends in pits)
+                # If OnPitRoad is True at the end of the lap, it's an inlap
+                if is_valid and 'OnPitRoad' in lap_telemetry:
+                    on_pit_road = lap_telemetry['OnPitRoad']
+                    if len(on_pit_road) > 0 and on_pit_road[-1]:
+                        is_valid = False
+                        invalid_reason = "Inlap (ended in pits)"
+                        logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
+
                 # Create lap object
                 lap = Lap.objects.create(
                     session=session,
                     lap_number=int(lap_number),
                     lap_time=round(lap_time, 4),
-                    is_valid=True  # TODO: Check track limits/off-track flags
+                    is_valid=is_valid
                 )
 
                 # Create telemetry data for this lap

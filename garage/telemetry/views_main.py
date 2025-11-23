@@ -601,63 +601,6 @@ def session_list(request):
 
 
 @login_required
-def session_detail(request, pk):
-    """
-    Detail view for a single session showing all laps.
-
-    Performance: Uses prefetch_related with Prefetch objects to avoid N+1 queries
-    when checking which analyses contain each lap.
-    """
-    from django.db.models import Prefetch
-
-    session = get_object_or_404(
-        Session.objects.select_related('track', 'car', 'driver', 'team'),
-        pk=pk
-    )
-
-    # Check permissions
-    if session.driver != request.user:
-        # TODO: Check if user has team access
-        messages.error(request, "You don't have permission to view this session.")
-        return redirect('telemetry:session_list')
-
-    laps = session.laps.all().order_by('lap_number')
-
-    # Get teams user belongs to that have Discord webhooks configured
-    user_teams_with_discord = Team.objects.filter(
-        members=request.user,
-        discord_webhook_url__isnull=False
-    ).exclude(discord_webhook_url='')
-
-    # Calculate session statistics
-    valid_laps = laps.filter(is_valid=True, lap_time__gt=0)
-    session_stats = None
-    if valid_laps.exists():
-        import statistics
-        lap_times = [float(lap.lap_time) for lap in valid_laps]
-        session_stats = {
-            'total_laps': laps.count(),
-            'valid_laps': valid_laps.count(),
-            'invalid_laps': laps.count() - valid_laps.count(),
-            'fastest_time': min(lap_times),
-            'slowest_time': max(lap_times),
-            'average_time': statistics.mean(lap_times),
-            'median_time': statistics.median(lap_times),
-            'std_dev': statistics.stdev(lap_times) if len(lap_times) > 1 else 0,
-        }
-
-    context = {
-        'session': session,
-        'laps': laps,
-        'best_lap': laps.filter(is_valid=True, lap_time__gt=0).order_by('lap_time').first(),
-        'user_teams_with_discord': user_teams_with_discord,
-        'session_stats': session_stats,
-    }
-
-    return render(request, 'telemetry/session_detail.html', context)
-
-
-@login_required
 def upload(request):
     """
     Upload IBT telemetry file.
@@ -679,7 +622,7 @@ def upload(request):
                 'File uploaded successfully! Your telemetry is being processed. '
                 'Track, car, and session details will be extracted automatically.'
             )
-            return redirect('telemetry:session_detail', pk=session.id)
+            return redirect('telemetry:home')
     else:
         form = SessionUploadForm(user=request.user)
 
