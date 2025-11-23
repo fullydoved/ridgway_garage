@@ -312,18 +312,9 @@ def parse_ibt_file(self, session_id):
                     invalid_reason = f"Incomplete lap (time: {lap_time:.3f}s)"
                     logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
 
-                # Check 2: Off-track detection
-                # PlayerTrackSurface: -1 = NotInWorld, 3 = OffTrack (both invalid)
-                if is_valid and 'PlayerTrackSurface' in lap_telemetry:
-                    track_surfaces = lap_telemetry['PlayerTrackSurface']
-                    off_track_samples = sum(1 for surface in track_surfaces if surface in [-1, 3])
-                    if off_track_samples > 0:
-                        is_valid = False
-                        invalid_reason = f"Off-track violation ({off_track_samples} samples)"
-                        logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
-
-                # Check 3: Incident detection
+                # Check 2: Incident detection
                 # If incident count increased during the lap, mark as invalid
+                # iRacing tracks off-track violations via the incident system
                 if is_valid and 'PlayerCarMyIncidentCount' in lap_telemetry:
                     incident_counts = lap_telemetry['PlayerCarMyIncidentCount']
                     if len(incident_counts) > 1:
@@ -335,7 +326,7 @@ def parse_ibt_file(self, session_id):
                             invalid_reason = f"Incident during lap ({incidents_this_lap}x)"
                             logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
 
-                # Check 4: Inlap detection (lap ends in pits)
+                # Check 3: Inlap detection (lap ends in pits)
                 # If OnPitRoad is True at the end of the lap, it's an inlap
                 if is_valid and 'OnPitRoad' in lap_telemetry:
                     on_pit_road = lap_telemetry['OnPitRoad']

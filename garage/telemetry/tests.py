@@ -522,45 +522,6 @@ class LapValidationTest(TestCase):
         self.assertFalse(lap.is_valid)
         self.assertLess(lap.lap_time, 10.0)
 
-    def test_invalid_lap_off_track(self):
-        """Test that laps with off-track excursions are marked invalid."""
-        # Create telemetry with off-track samples
-        # PlayerTrackSurface: 3 = OffTrack
-        track_surfaces = [1] * 50 + [3] * 10 + [1] * 40  # 10 samples off-track
-
-        lap = self._create_lap_with_telemetry(
-            lap_number=3,
-            lap_time=104.567,
-            is_valid=False,
-            track_surface_values=track_surfaces
-        )
-
-        self.assertFalse(lap.is_valid)
-
-        # Verify telemetry contains off-track samples
-        telemetry = TelemetryData.objects.get(lap=lap)
-        off_track_count = sum(1 for surface in telemetry.data['PlayerTrackSurface'] if surface == 3)
-        self.assertGreater(off_track_count, 0)
-
-    def test_invalid_lap_not_in_world(self):
-        """Test that laps with NotInWorld surface are marked invalid (reset/tow)."""
-        # PlayerTrackSurface: -1 = NotInWorld (driver reset/towed)
-        track_surfaces = [1] * 30 + [-1] * 20 + [1] * 50
-
-        lap = self._create_lap_with_telemetry(
-            lap_number=4,
-            lap_time=98.234,
-            is_valid=False,
-            track_surface_values=track_surfaces
-        )
-
-        self.assertFalse(lap.is_valid)
-
-        # Verify telemetry contains NotInWorld samples
-        telemetry = TelemetryData.objects.get(lap=lap)
-        not_in_world_count = sum(1 for surface in telemetry.data['PlayerTrackSurface'] if surface == -1)
-        self.assertGreater(not_in_world_count, 0)
-
     def test_invalid_lap_incident(self):
         """Test that laps with incidents are marked invalid."""
         # Incident count increases during lap (started at 0, ended at 2)
@@ -639,11 +600,12 @@ class LapValidationTest(TestCase):
             is_valid=True
         )
 
+        # Create invalid lap with incident
         invalid_fast = self._create_lap_with_telemetry(
             lap_number=2,
             lap_time=100.000,  # Fastest but invalid
             is_valid=False,
-            track_surface_values=[1] * 50 + [3] * 50  # Off-track
+            incident_values=[0] * 50 + [1] * 50  # Had an incident
         )
 
         valid_fast = self._create_lap_with_telemetry(
