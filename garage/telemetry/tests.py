@@ -522,6 +522,26 @@ class LapValidationTest(TestCase):
         self.assertFalse(lap.is_valid)
         self.assertLess(lap.lap_time, 10.0)
 
+    def test_invalid_lap_reset(self):
+        """Test that laps with reset/tow are marked invalid."""
+        # PlayerTrackSurface: -1 = NotInWorld (driver reset mid-lap)
+        # Simulate a lap where driver was going, then reset, then resumed
+        track_surfaces = [1] * 30 + [-1] * 20 + [1] * 50  # Reset happened mid-lap
+
+        lap = self._create_lap_with_telemetry(
+            lap_number=3,
+            lap_time=45.234,  # Partial lap time (reset mid-lap)
+            is_valid=False,
+            track_surface_values=track_surfaces
+        )
+
+        self.assertFalse(lap.is_valid)
+
+        # Verify telemetry contains NotInWorld samples
+        telemetry = TelemetryData.objects.get(lap=lap)
+        not_in_world_count = sum(1 for surface in telemetry.data['PlayerTrackSurface'] if surface == -1)
+        self.assertGreater(not_in_world_count, 0)
+
     def test_invalid_lap_incident(self):
         """Test that laps with incidents are marked invalid."""
         # Incident count increases during lap (started at 0, ended at 2)
