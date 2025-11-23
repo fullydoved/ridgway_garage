@@ -305,12 +305,39 @@ def parse_ibt_file(self, session_id):
                 is_valid = True
                 invalid_reason = None
 
-                # Check 1: Incomplete lap (lap time is 0 or suspiciously short)
-                # A legitimate lap should be at least 10 seconds (even on short ovals)
+                # Check 1: Incomplete lap detection
+                # Laps < 10s are incomplete (session ended mid-lap)
                 if lap_time < 10.0:
                     is_valid = False
                     invalid_reason = f"Incomplete lap (time: {lap_time:.3f}s)"
                     logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
+
+                # Check 1b: Reset detection via position teleportation
+                # When driver resets, their position jumps 100+ meters instantly
+                if is_valid and 'Lat' in lap_telemetry and 'Lon' in lap_telemetry:
+                    import math
+                    lats = lap_telemetry['Lat']
+                    lons = lap_telemetry['Lon']
+
+                    # Calculate max position jump between consecutive samples
+                    max_jump = 0
+                    for i in range(1, min(len(lats), len(lons))):
+                        # Haversine formula for distance
+                        R = 6371000  # Earth radius in meters
+                        lat1, lon1, lat2, lon2 = map(math.radians, [lats[i-1], lons[i-1], lats[i], lons[i]])
+                        dlat = lat2 - lat1
+                        dlon = lon2 - lon1
+                        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+                        c = 2 * math.asin(math.sqrt(a))
+                        dist = R * c
+                        if dist > max_jump:
+                            max_jump = dist
+
+                    # Position jumps > 100m indicate reset/teleport (normal is ~1m)
+                    if max_jump > 100:
+                        is_valid = False
+                        invalid_reason = f"Reset detected (position jump: {max_jump:.1f}m)"
+                        logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
 
                 # Check 2: Reset/Tow detection
                 # PlayerTrackSurface = -1 means NotInWorld (driver reset or was towed)
