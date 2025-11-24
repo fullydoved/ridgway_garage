@@ -146,6 +146,12 @@ def parse_ibt_file(self, session_id):
                     session.driver_name = driver_name
                     logger.info(f"Extracted driver name: {driver_name}")
 
+                # Extract setup name
+                setup_name = (driver_info.get('DriverSetupName') or '').strip()
+                if setup_name:
+                    session.setup_name = setup_name
+                    logger.info(f"Extracted setup name: {setup_name}")
+
                 # Extract car info
                 if not session.car:
                     car_name = (driver_info.get('CarScreenName') or '').strip()

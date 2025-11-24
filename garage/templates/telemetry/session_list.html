@@ -96,6 +96,9 @@
                             {% else %}
                                 Detecting car...
                             {% endif %}
+                            {% if session.setup_name %}
+                                <span class="text-xs text-gray-500">• Setup: <span class="text-neon-cyan">{{ session.setup_name }}</span></span>
+                            {% endif %}
                         </div>
                         <div class="flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

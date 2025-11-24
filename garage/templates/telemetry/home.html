@@ -105,6 +105,11 @@
                                             <span class="text-gray-500">Unknown Car</span>
                                         {% endif %}
                                     </p>
+                                    {% if session.setup_name %}
+                                        <p class="text-gray-500 text-xs mt-1">
+                                            Setup: <span class="text-neon-cyan">{{ session.setup_name }}</span>
+                                        </p>
+                                    {% endif %}
                                 </div>
 
                                 <!-- Stats Row -->

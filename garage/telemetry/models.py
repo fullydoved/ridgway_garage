@@ -269,6 +269,9 @@ class Session(models.Model):
     track_temp = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True, help_text="Track temperature in Celsius")
     weather_type = models.CharField(max_length=50, blank=True, help_text="Weather condition")
 
+    # Car setup information (extracted from IBT)
+    setup_name = models.CharField(max_length=255, blank=True, help_text="Setup filename used during this session")
+
     # Privacy
     is_public = models.BooleanField(default=False, help_text="Allow public viewing")
 
