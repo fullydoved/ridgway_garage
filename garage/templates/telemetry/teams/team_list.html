@@ -20,23 +20,25 @@
     <!-- Search Bar -->
     <div class="mb-8">
         <form method="get" action="{% url 'telemetry:team_list' %}" class="relative">
-            <input
-                type="text"
-                name="search"
-                value="{{ search_query|default:'' }}"
-                placeholder="Search teams..."
-                class="input-neon w-full pl-12"
-            >
-            <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-            {% if search_query %}
-            <a href="{% url 'telemetry:team_list' %}" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            <div class="relative">
+                <input
+                    type="text"
+                    name="search"
+                    value="{{ search_query|default:'' }}"
+                    placeholder="Search teams..."
+                    class="input-neon w-full pl-12"
+                >
+                <svg class="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
-            </a>
-            {% endif %}
+                {% if search_query %}
+                <a href="{% url 'telemetry:team_list' %}" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </a>
+                {% endif %}
+            </div>
         </form>
     </div>
 
@@ -119,15 +121,19 @@
     </div>
     {% endif %}
 
-    {% if public_teams %}
-    <!-- Public Teams Section -->
-    <div>
-        <h2 class="text-2xl font-bold text-neon-cyan mb-6 flex items-center gap-2">
+    <!-- Available Teams Section -->
+    <div class="mb-12">
+        <h2 class="text-2xl font-bold text-green-400 mb-6 flex items-center gap-2">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
             </svg>
-            Public Teams
+            Teams You Can Join
+            {% if search_query %}
+                <span class="text-sm text-gray-400 font-normal">(search results)</span>
+            {% endif %}
         </h2>
+
+        {% if public_teams %}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {% for team in public_teams %}
             <div class="glass-card p-6 corner-brackets hover:-translate-y-1 transition-all duration-300">
@@ -168,7 +174,21 @@
             </div>
             {% endfor %}
         </div>
+        {% else %}
+        <div class="glass-card p-12 text-center corner-brackets">
+            <svg class="w-24 h-24 mx-auto mb-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <h3 class="text-2xl font-bold text-white mb-3">No Teams Found</h3>
+            <p class="text-gray-400">
+                {% if search_query %}
+                    No teams match your search "{{ search_query }}". Try a different search term.
+                {% else %}
+                    There are no public teams available to join at the moment.
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 {% endblock %}
