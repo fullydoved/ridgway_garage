@@ -270,7 +270,7 @@ def home(request):
             'track', 'car', 'team'
         ).prefetch_related('laps').annotate(
             lap_count=Count('laps')
-        ).filter(lap_count__gt=0).order_by('-session_date')[:10]  # Get more to filter
+        ).filter(lap_count__gt=0).order_by('-session_date').distinct()[:10]  # Get more to filter
 
         # Add best lap for each session and filter out sessions with no valid laps
         sessions_with_valid_laps = []
@@ -1130,10 +1130,36 @@ def api_upload(request):
             'error': 'File appears to be too small to be a valid IBT file'
         }, status=400)
 
+    # Calculate file hash for duplicate detection
+    import hashlib
+    uploaded_file.seek(0)  # Reset file pointer to beginning
+    hash_obj = hashlib.sha256()
+    for chunk in uploaded_file.chunks():
+        hash_obj.update(chunk)
+    file_hash = hash_obj.hexdigest()
+    uploaded_file.seek(0)  # Reset for saving
+
+    # Check for duplicate session
+    existing_session = Session.objects.filter(
+        driver=request.user,
+        file_hash=file_hash
+    ).first()
+
+    if existing_session:
+        logger.info(f"Duplicate upload detected: {uploaded_file.name} (session {existing_session.id})")
+        return JsonResponse({
+            'success': True,
+            'duplicate': True,
+            'session_id': existing_session.id,
+            'filename': uploaded_file.name,
+            'message': 'This session has already been uploaded'
+        }, status=200)
+
     # Create session
     session = Session(
         driver=request.user,
         ibt_file=uploaded_file,
+        file_hash=file_hash,
         processing_status='pending'
     )
 

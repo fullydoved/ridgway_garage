@@ -236,6 +236,13 @@ class Session(models.Model):
         null=True,
         blank=True
     )
+    file_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="SHA256 hash of uploaded IBT file for duplicate detection"
+    )
 
     # Processing status
     processing_status = models.CharField(max_length=20, choices=PROCESSING_STATUS_CHOICES, default='pending')
@@ -276,6 +283,7 @@ class Session(models.Model):
             models.Index(fields=['processing_status']),
             models.Index(fields=['-session_date']),
             models.Index(fields=['is_live', '-last_telemetry_update']),
+            models.Index(fields=['driver', 'file_hash']),  # Fast duplicate detection
         ]
 
     def __str__(self):
