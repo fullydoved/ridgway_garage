@@ -1367,6 +1367,7 @@ def api_generate_chart(request):
         # Parse request body
         body = json.loads(request.body)
         lap_ids = body.get('lap_ids', [])
+        lap_colors = body.get('lap_colors', [])  # Color assignments from client
         selected_channels = body.get('channels', [])
 
         if not lap_ids:
@@ -1396,17 +1397,23 @@ def api_generate_chart(request):
             return JsonResponse({'error': 'No valid laps found'}, status=404)
 
         # Color palette (hot to cold: Red, Orange, Yellow, Green, Blue)
-        colors = ['#FF0000', '#FF8C00', '#FFD700', '#00FF00', '#00BFFF']
+        default_colors = ['#FF0000', '#FF8C00', '#FFD700', '#00FF00', '#00BFFF']
 
         # Extract telemetry data
         lap_data = []
         for i, lap in enumerate(laps):
             telemetry = lap.telemetry
             if telemetry and telemetry.data:
+                # Use client-provided color if available, otherwise use default palette
+                if lap_colors and i < len(lap_colors):
+                    color = lap_colors[i]
+                else:
+                    color = default_colors[i % len(default_colors)]
+
                 lap_data.append({
                     'lap': lap,
                     'data': telemetry.data,
-                    'color': colors[i % len(colors)],
+                    'color': color,
                     'name': f"{lap.session.driver.username} - {lap.lap_time:.3f}s"
                 })
 

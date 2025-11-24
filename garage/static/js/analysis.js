@@ -222,7 +222,6 @@ async function addLapToView(lapId, customColor = null) {
         }
 
         // Update UI
-        updateCurrentLapsChips();
         refreshLapsSidebar(); // Update sidebar to show colored borders
         updateCharts();
 
@@ -234,7 +233,6 @@ async function addLapToView(lapId, customColor = null) {
 
 function removeLapFromView(lapId) {
     state.activeLaps = state.activeLaps.filter(lap => lap.id !== lapId);
-    updateCurrentLapsChips();
     refreshLapsSidebar(); // Update sidebar to remove colored borders
     updateCharts();
 }
@@ -246,7 +244,6 @@ function clearAllLaps() {
         state.map.removeLayer(state.clickMarker);
         state.clickMarker = null;
     }
-    updateCurrentLapsChips();
     refreshLapsSidebar(); // Update sidebar to remove all colored borders
     document.getElementById('chartsContainer').innerHTML = `
         <div class="text-center py-12">
@@ -262,22 +259,6 @@ function clearAllLaps() {
         state.map = null;
     }
     document.getElementById('mapContainer').style.display = 'none';
-}
-
-function updateCurrentLapsChips() {
-    const container = document.getElementById('currentLapsChips');
-    if (state.activeLaps.length === 0) {
-        container.innerHTML = '<span class="text-sm text-gray-500">No laps selected</span>';
-        return;
-    }
-
-    container.innerHTML = state.activeLaps.map(lap => `
-        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-cyber-dark/50" style="border: 2px solid ${lap.color};">
-            <span class="w-3 h-3 rounded-full" style="background-color: ${lap.color};"></span>
-            <span class="text-sm font-medium" style="color: ${lap.color};">${lap.data.driver} - ${formatLapTime(lap.data.lap_time)}</span>
-            <button type="button" class="text-gray-400 hover:text-white transition-colors" onclick="removeLapFromView(${lap.id})">×</button>
-        </div>
-    `).join('');
 }
 
 // ============================================================================
@@ -310,7 +291,7 @@ async function updateCharts() {
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value ||
                          getCookie('csrftoken');
 
-        // Call API to generate charts
+        // Call API to generate charts with color assignments
         const response = await fetch('/api/generate-chart/', {
             method: 'POST',
             headers: {
@@ -319,6 +300,7 @@ async function updateCharts() {
             },
             body: JSON.stringify({
                 lap_ids: state.activeLaps.map(lap => lap.id),
+                lap_colors: state.activeLaps.map(lap => lap.color), // Pass color assignments
                 channels: selectedChannels
             })
         });
