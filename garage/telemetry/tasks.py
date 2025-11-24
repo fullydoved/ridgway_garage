@@ -123,6 +123,12 @@ def parse_ibt_file(self, session_id):
             driver_info_section = session_info['DriverInfo']
             drivers = driver_info_section.get('Drivers', [])
 
+            # Extract setup name from DriverInfo section (not from individual driver)
+            setup_name = (driver_info_section.get('DriverSetupName') or '').strip()
+            if setup_name:
+                session.setup_name = setup_name
+                logger.info(f"Extracted setup name: {setup_name}")
+
             # Get the player's car index to identify which driver is the actual player
             # DriverCarIdx tells us which entry in the Drivers array is the player
             player_car_idx = driver_info_section.get('DriverCarIdx')
@@ -145,12 +151,6 @@ def parse_ibt_file(self, session_id):
                 if driver_name:
                     session.driver_name = driver_name
                     logger.info(f"Extracted driver name: {driver_name}")
-
-                # Extract setup name
-                setup_name = (driver_info.get('DriverSetupName') or '').strip()
-                if setup_name:
-                    session.setup_name = setup_name
-                    logger.info(f"Extracted setup name: {setup_name}")
 
                 # Extract car info
                 if not session.car:

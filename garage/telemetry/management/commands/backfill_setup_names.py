@@ -111,26 +111,12 @@ class Command(BaseCommand):
                     error_count += 1
                     continue
 
-                # Extract setup name from DriverInfo
+                # Extract setup name from DriverInfo section (not individual driver)
                 setup_name = ''
                 if 'DriverInfo' in session_info and session_info['DriverInfo']:
                     driver_info_section = session_info['DriverInfo']
-                    drivers = driver_info_section.get('Drivers', [])
-                    player_car_idx = driver_info_section.get('DriverCarIdx')
-
-                    if drivers and player_car_idx is not None:
-                        # Find the player by matching CarIdx
-                        driver_info = None
-                        for driver in drivers:
-                            if driver.get('CarIdx') == player_car_idx:
-                                driver_info = driver
-                                break
-
-                        if driver_info is None and drivers:
-                            driver_info = drivers[0]
-
-                        if driver_info:
-                            setup_name = (driver_info.get('DriverSetupName') or '').strip()
+                    # Setup name is at the DriverInfo section level, not in Drivers array
+                    setup_name = (driver_info_section.get('DriverSetupName') or '').strip()
 
                 if not setup_name:
                     self.stdout.write(
