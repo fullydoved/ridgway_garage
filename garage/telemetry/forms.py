@@ -8,7 +8,7 @@ from django.core.validators import FileExtensionValidator
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import PasswordChangeForm
 
-from .models import Session, Track, Car, Team, Lap, Driver
+from .models import Session, Track, Car, Team, Lap, Driver, JoinRequest, TeamInvitation
 
 
 class SessionUploadForm(forms.ModelForm):
@@ -69,7 +69,7 @@ class TeamForm(forms.ModelForm):
 
     class Meta:
         model = Team
-        fields = ['name', 'description', 'is_public', 'allow_join_requests', 'discord_webhook_url']
+        fields = ['name', 'description', 'is_public', 'allow_join_requests', 'is_default_team', 'discord_webhook_url']
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -82,6 +82,7 @@ class TeamForm(forms.ModelForm):
             }),
             'is_public': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'allow_join_requests': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'is_default_team': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'discord_webhook_url': forms.URLInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'https://discord.com/api/webhooks/...'
@@ -100,6 +101,7 @@ class TeamForm(forms.ModelForm):
         self.fields['description'].help_text = 'Optional team description'
         self.fields['is_public'].help_text = 'Allow public viewing of team telemetry'
         self.fields['allow_join_requests'].help_text = 'Allow users to request to join'
+        self.fields['is_default_team'].help_text = 'Make this the default team for new users (only one team can be default)'
         self.fields['discord_webhook_url'].help_text = 'Discord webhook URL for sharing laps (optional)'
 
     def clean_discord_webhook_url(self):
@@ -216,3 +218,61 @@ class CustomPasswordChangeForm(PasswordChangeForm):
         self.fields['old_password'].help_text = 'Enter your current password'
         self.fields['new_password1'].help_text = 'Enter your new password'
         self.fields['new_password2'].help_text = 'Enter the same password again for verification'
+
+
+class JoinRequestForm(forms.ModelForm):
+    """
+    Form for requesting to join a team.
+    """
+
+    class Meta:
+        model = JoinRequest
+        fields = ['message']
+        widgets = {
+            'message': forms.Textarea(attrs={
+                'class': 'input-neon',
+                'rows': 4,
+                'placeholder': 'Optional: Tell the team why you want to join...'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['message'].required = False
+        self.fields['message'].help_text = 'Optional message to the team (why you want to join, your experience, etc.)'
+
+
+class TeamInviteForm(forms.ModelForm):
+    """
+    Form for inviting users to join a team.
+    """
+
+    class Meta:
+        model = TeamInvitation
+        fields = ['email', 'message']
+        widgets = {
+            'email': forms.EmailInput(attrs={
+                'class': 'input-neon',
+                'placeholder': 'user@example.com'
+            }),
+            'message': forms.Textarea(attrs={
+                'class': 'input-neon',
+                'rows': 4,
+                'placeholder': 'Optional invitation message...'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['message'].required = False
+        self.fields['email'].help_text = 'Email address of the user you want to invite'
+        self.fields['message'].help_text = 'Optional message included with the invitation'
+
+    def clean_email(self):
+        """Validate email format"""
+        email = self.cleaned_data.get('email')
+        if email:
+            # Basic email validation is handled by EmailField
+            # Additional custom validation can be added here if needed
+            pass
+        return email

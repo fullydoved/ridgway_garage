@@ -4,3 +4,7 @@ from django.apps import AppConfig
 class TelemetryConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'telemetry'
+
+    def ready(self):
+        """Import signals when app is ready."""
+        import telemetry.signals  # noqa: F401

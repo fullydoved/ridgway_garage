@@ -30,6 +30,19 @@ urlpatterns = [
     path('teams/<int:pk>/edit/', views.team_edit, name='team_edit'),
     path('teams/<int:pk>/delete/', views.team_delete, name='team_delete'),
 
+    # Join requests
+    path('teams/<int:pk>/request-join/', views.team_request_join, name='team_request_join'),
+    path('teams/<int:pk>/cancel-request/', views.team_cancel_request, name='team_cancel_request'),
+    path('teams/<int:pk>/manage-requests/', views.team_manage_requests, name='team_manage_requests'),
+    path('teams/<int:pk>/requests/<int:request_id>/approve/', views.team_approve_request, name='team_approve_request'),
+    path('teams/<int:pk>/requests/<int:request_id>/reject/', views.team_reject_request, name='team_reject_request'),
+
+    # Team invitations
+    path('teams/<int:pk>/invite/', views.team_invite_user, name='team_invite_user'),
+    path('teams/<int:pk>/manage-invites/', views.team_manage_invites, name='team_manage_invites'),
+    path('teams/invites/<uuid:token>/accept/', views.team_accept_invite, name='team_accept_invite'),
+    path('teams/invites/<uuid:token>/decline/', views.team_decline_invite, name='team_decline_invite'),
+
     # Leaderboards
     path('leaderboards/', views.leaderboards, name='leaderboards'),
 

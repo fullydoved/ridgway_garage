@@ -8,7 +8,9 @@ telemetry information for analysis and comparison.
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import FileExtensionValidator
+from django.core.exceptions import ValidationError
 from django.utils import timezone
+import uuid
 
 
 class Driver(models.Model):
@@ -74,6 +76,7 @@ class Team(models.Model):
     # Privacy settings
     is_public = models.BooleanField(default=False, help_text="Allow public viewing of team telemetry")
     allow_join_requests = models.BooleanField(default=True, help_text="Allow users to request to join")
+    is_default_team = models.BooleanField(default=False, help_text="Default team for new users (only one allowed)")
 
     # Discord integration
     discord_webhook_url = models.CharField(
@@ -92,11 +95,74 @@ class Team(models.Model):
         indexes = [
             models.Index(fields=['is_public']),  # For filtering public teams
             models.Index(fields=['owner']),  # For owner's team listings
+            models.Index(fields=['is_default_team']),  # For finding default team
             # Note: name already has index via unique=True constraint
         ]
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        """Validate that only one team can be the default team."""
+        if self.is_default_team:
+            # Check if another team is already the default
+            existing_default = Team.objects.filter(is_default_team=True).exclude(pk=self.pk).first()
+            if existing_default:
+                raise ValidationError({
+                    'is_default_team': f'Team "{existing_default.name}" is already set as the default team. '
+                                      'Only one team can be the default.'
+                })
+
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def is_user_member(self, user):
+        """Check if a user is a member of this team."""
+        if not user.is_authenticated:
+            return False
+        return self.members.filter(pk=user.pk).exists()
+
+    def get_user_role(self, user):
+        """Get user's role in this team, or None if not a member."""
+        if not user.is_authenticated:
+            return None
+        membership = TeamMembership.objects.filter(team=self, user=user).first()
+        return membership.role if membership else None
+
+    def is_user_admin(self, user):
+        """Check if user has admin privileges (owner or admin role)."""
+        if not user.is_authenticated:
+            return False
+        role = self.get_user_role(user)
+        return role in ['owner', 'admin']
+
+    def can_user_request_join(self, user):
+        """Check if a user can request to join this team."""
+        if not user.is_authenticated:
+            return False
+        if self.is_user_member(user):
+            return False
+        if not self.allow_join_requests:
+            return False
+        # Check if user already has a pending request
+        if hasattr(self, 'join_requests'):  # Will be available after JoinRequest model is created
+            from telemetry.models import JoinRequest  # Import here to avoid circular import
+            if JoinRequest.objects.filter(team=self, user=user, status='pending').exists():
+                return False
+        return True
+
+    def has_pending_request(self, user):
+        """Check if user has a pending join request for this team."""
+        if not user.is_authenticated:
+            return False
+        try:
+            from telemetry.models import JoinRequest
+            return JoinRequest.objects.filter(team=self, user=user, status='pending').exists()
+        except (ImportError, AttributeError):
+            # JoinRequest model doesn't exist yet
+            return False
 
 
 class TeamMembership(models.Model):
@@ -125,6 +191,165 @@ class TeamMembership(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.team.name} ({self.role})"
+
+
+class JoinRequest(models.Model):
+    """
+    Join request from a user to join a team.
+    Requires approval from team owner or admin.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='join_requests')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='team_join_requests')
+    message = models.TextField(
+        blank=True,
+        help_text="Optional message from user explaining why they want to join"
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='reviewed_join_requests'
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['team', 'status']),  # For filtering pending requests
+            models.Index(fields=['user', 'status']),  # For user's request history
+        ]
+        # Constraint: one pending request per user per team
+        constraints = [
+            models.UniqueConstraint(
+                fields=['team', 'user'],
+                condition=models.Q(status='pending'),
+                name='unique_pending_join_request'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} → {self.team.name} ({self.status})"
+
+    def approve(self, approved_by):
+        """Approve the join request and add user to team."""
+        self.status = 'approved'
+        self.reviewed_at = timezone.now()
+        self.reviewed_by = approved_by
+        self.save()
+
+        # Create team membership
+        TeamMembership.objects.create(
+            team=self.team,
+            user=self.user,
+            role='member'
+        )
+
+    def reject(self, rejected_by):
+        """Reject the join request."""
+        self.status = 'rejected'
+        self.reviewed_at = timezone.now()
+        self.reviewed_by = rejected_by
+        self.save()
+
+
+class TeamInvitation(models.Model):
+    """
+    Invitation from team owner/admin to user to join the team.
+    Uses token-based system for secure invitations.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('declined', 'Declined'),
+        ('expired', 'Expired'),
+    ]
+
+    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='invitations')
+    invited_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_team_invitations')
+    email = models.EmailField(help_text="Email of invited user")
+    invited_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='team_invitations',
+        help_text="User object if they exist in the system"
+    )
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    message = models.TextField(blank=True, help_text="Optional message from the inviter")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(help_text="Invitation expires after 7 days")
+    accepted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['team', 'status']),  # For filtering pending invitations
+            models.Index(fields=['email', 'status']),  # For user's invitation lookup
+            models.Index(fields=['token']),  # For token-based lookup
+        ]
+
+    def __str__(self):
+        return f"{self.team.name} → {self.email} ({self.status})"
+
+    def save(self, *args, **kwargs):
+        """Set expiration date if not set."""
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timezone.timedelta(days=7)
+
+        # If email matches a user, link the invitation
+        if not self.invited_user and self.email:
+            try:
+                self.invited_user = User.objects.get(email=self.email)
+            except User.DoesNotExist:
+                pass
+
+        super().save(*args, **kwargs)
+
+    def is_expired(self):
+        """Check if invitation has expired."""
+        return timezone.now() > self.expires_at
+
+    def accept(self, user):
+        """Accept the invitation and add user to team."""
+        if self.is_expired():
+            self.status = 'expired'
+            self.save()
+            raise ValidationError("This invitation has expired.")
+
+        if self.status != 'pending':
+            raise ValidationError("This invitation has already been processed.")
+
+        self.status = 'accepted'
+        self.accepted_at = timezone.now()
+        self.invited_user = user
+        self.save()
+
+        # Create team membership
+        TeamMembership.objects.get_or_create(
+            team=self.team,
+            user=user,
+            defaults={'role': 'member'}
+        )
+
+    def decline(self):
+        """Decline the invitation."""
+        self.status = 'declined'
+        self.save()
 
 
 class Track(models.Model):

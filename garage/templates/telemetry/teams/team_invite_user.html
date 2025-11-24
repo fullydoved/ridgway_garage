@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Invite User - {{ team.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-8">
+    <!-- Back Button -->
+    <div class="mb-6">
+        <a href="{% url 'telemetry:team_manage_invites' team.pk %}" class="inline-flex items-center gap-2 text-gray-400 hover:text-neon-cyan transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+            </svg>
+            Back to Invitations
+        </a>
+    </div>
+
+    <!-- Page Header -->
+    <div class="glass-card p-8 corner-brackets mb-8">
+        <div class="flex items-start gap-4">
+            <div class="w-16 h-16 rounded-full bg-green-500/20 border-2 border-green-500 flex items-center justify-center flex-shrink-0">
+                <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76"/>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-3xl font-bold text-white mb-2">
+                    Invite User to Team
+                </h1>
+                <p class="text-xl text-green-500">{{ team.name }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Invitation Form -->
+    <div class="glass-card p-8 corner-brackets">
+        <form method="post">
+            {% csrf_token %}
+
+            <div class="mb-6">
+                <label for="{{ form.email.id_for_label }}" class="block text-lg font-semibold text-white mb-2">
+                    Email Address *
+                </label>
+                <p class="text-sm text-gray-400 mb-4">
+                    Enter the email address of the person you want to invite. They'll receive an invitation link.
+                </p>
+                {{ form.email }}
+                {% if form.email.help_text %}
+                <p class="text-xs text-gray-500 mt-2">{{ form.email.help_text }}</p>
+                {% endif %}
+                {% if form.email.errors %}
+                <p class="text-ridgway-red text-sm mt-2">{{ form.email.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="mb-6">
+                <label for="{{ form.message.id_for_label }}" class="block text-lg font-semibold text-white mb-2">
+                    Personal Message (Optional)
+                </label>
+                <p class="text-sm text-gray-400 mb-4">
+                    Include a personal message with your invitation. Let them know why you'd like them on the team!
+                </p>
+                {{ form.message }}
+                {% if form.message.help_text %}
+                <p class="text-xs text-gray-500 mt-2">{{ form.message.help_text }}</p>
+                {% endif %}
+                {% if form.message.errors %}
+                <p class="text-ridgway-red text-sm mt-2">{{ form.message.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <div class="bg-cyber-dark/50 rounded-lg p-6 border border-cyber-border mb-6">
+                <h3 class="text-white font-semibold mb-3 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-neon-cyan" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                    </svg>
+                    How invitations work
+                </h3>
+                <ul class="space-y-2 text-gray-400">
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-neon-cyan flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        The user will receive an invitation link (if they're registered)
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-neon-cyan flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Invitations expire after 7 days
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-neon-cyan flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        If they accept, they'll join the team immediately
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-neon-cyan flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Track invitation status in the team management page
+                    </li>
+                </ul>
+            </div>
+
+            <div class="flex gap-4">
+                <button type="submit" class="btn-neon flex-1">
+                    Send Invitation
+                </button>
+                <a href="{% url 'telemetry:team_manage_invites' team.pk %}" class="flex-1 text-center px-6 py-3 rounded-lg font-semibold transition-all duration-300 border-2 border-gray-500 bg-gray-500/10 text-gray-400 hover:bg-gray-500/20 hover:border-gray-400">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

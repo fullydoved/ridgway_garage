@@ -4,7 +4,7 @@ Django Admin configuration for Telemetry models.
 
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Driver, Team, TeamMembership, Track, Car, Session, Lap, TelemetryData
+from .models import Driver, Team, TeamMembership, JoinRequest, TeamInvitation, Track, Car, Session, Lap, TelemetryData
 
 
 @admin.register(Driver)
@@ -23,11 +23,29 @@ class TeamMembershipInline(admin.TabularInline):
 
 @admin.register(Team)
 class TeamAdmin(admin.ModelAdmin):
-    list_display = ['name', 'owner', 'is_public', 'allow_join_requests', 'created_at']
-    list_filter = ['is_public', 'allow_join_requests', 'created_at']
+    list_display = ['name', 'owner', 'is_public', 'allow_join_requests', 'is_default_team', 'created_at']
+    list_filter = ['is_public', 'allow_join_requests', 'is_default_team', 'created_at']
     search_fields = ['name', 'description', 'owner__username']
     raw_id_fields = ['owner']
     inlines = [TeamMembershipInline]
+
+
+@admin.register(JoinRequest)
+class JoinRequestAdmin(admin.ModelAdmin):
+    list_display = ['user', 'team', 'status', 'created_at', 'reviewed_by', 'reviewed_at']
+    list_filter = ['status', 'created_at', 'reviewed_at']
+    search_fields = ['user__username', 'team__name', 'message']
+    raw_id_fields = ['user', 'team', 'reviewed_by']
+    readonly_fields = ['created_at', 'reviewed_at']
+
+
+@admin.register(TeamInvitation)
+class TeamInvitationAdmin(admin.ModelAdmin):
+    list_display = ['team', 'email', 'invited_by', 'status', 'created_at', 'expires_at']
+    list_filter = ['status', 'created_at', 'expires_at']
+    search_fields = ['email', 'team__name', 'invited_by__username']
+    raw_id_fields = ['team', 'invited_by', 'invited_user']
+    readonly_fields = ['token', 'created_at', 'accepted_at']
 
 
 @admin.register(Track)

@@ -12,6 +12,17 @@ from .teams import (
     team_detail,
     team_edit,
     team_delete,
+    # Join request views
+    team_request_join,
+    team_cancel_request,
+    team_manage_requests,
+    team_approve_request,
+    team_reject_request,
+    # Invitation views
+    team_invite_user,
+    team_manage_invites,
+    team_accept_invite,
+    team_decline_invite,
 )
 
 # Import all other views from views_main.py (temporary during refactoring)
@@ -59,6 +70,15 @@ __all__ = [
     'team_detail',
     'team_edit',
     'team_delete',
+    'team_request_join',
+    'team_cancel_request',
+    'team_manage_requests',
+    'team_approve_request',
+    'team_reject_request',
+    'team_invite_user',
+    'team_manage_invites',
+    'team_accept_invite',
+    'team_decline_invite',
 
     # Core views (from views_main.py)
     'home',
