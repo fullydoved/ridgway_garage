@@ -10,14 +10,16 @@ const state = {
     selectedTrackId: null,
     selectedCarId: null,
     includeTeam: true,
-    colors: ['#00d1b2', '#ff6b6b', '#4ecdc4', '#ffe66d', '#a8dadc', '#f1fa8c', '#ff79c6', '#bd93f9'],
+    colors: ['#FF0000', '#FF8C00', '#FFD700', '#00FF00', '#00BFFF'], // Hot to cold: Red, Orange, Yellow, Green, Blue
     map: null,
     mapTileLayer: null,
     mapMarkers: [],
     hoverMarkers: [], // Markers for hover position on map
     clickMarker: null, // Marker for clicked position on map
     preloadedLapId: null, // Will be set from template if lap parameter exists
-    preloadedSessionLaps: null // Will be set from template if session parameter exists (array of lap IDs)
+    preloadedSessionLaps: null, // Will be set from template if session parameter exists (array of lap IDs)
+    userLaps: [], // Stored user laps data for re-rendering
+    teammateLaps: [] // Stored teammate laps data for re-rendering
 };
 
 // Format lap time (seconds to MM:SS.mmm)
@@ -38,16 +40,38 @@ function getNextColor() {
     return state.colors[0]; // Fallback
 }
 
-// Generate blue-to-red gradient colors for session laps
+// Generate hot-to-cold gradient colors for session laps
+// Fastest lap = Red, Slowest lap = Blue
 function generateGradientColors(count) {
+    // Define color stops: Red -> Orange -> Yellow -> Green -> Blue
+    const colorStops = [
+        [255, 0, 0],      // Red (fastest)
+        [255, 140, 0],    // Orange
+        [255, 215, 0],    // Yellow
+        [0, 255, 0],      // Green
+        [0, 191, 255]     // Blue (slowest)
+    ];
+
     const colors = [];
     for (let i = 0; i < count; i++) {
         const t = i / (count - 1); // Normalized position (0 to 1)
+        const scaledT = t * (colorStops.length - 1); // Scale to color stops
+        const index = Math.floor(scaledT);
+        const localT = scaledT - index;
 
-        // Blue (0, 100, 255) -> Red (255, 0, 0)
-        const r = Math.round(0 + t * 255);
-        const g = Math.round(100 * (1 - t));
-        const b = Math.round(255 * (1 - t));
+        // Handle edge case (last color)
+        if (index >= colorStops.length - 1) {
+            const [r, g, b] = colorStops[colorStops.length - 1];
+            colors.push(`rgb(${r}, ${g}, ${b})`);
+            continue;
+        }
+
+        // Interpolate between two adjacent color stops
+        const [r1, g1, b1] = colorStops[index];
+        const [r2, g2, b2] = colorStops[index + 1];
+        const r = Math.round(r1 + (r2 - r1) * localT);
+        const g = Math.round(g1 + (g2 - g1) * localT);
+        const b = Math.round(b1 + (b2 - b1) * localT);
 
         colors.push(`rgb(${r}, ${g}, ${b})`);
     }
@@ -156,9 +180,9 @@ async function addLapToView(lapId, customColor = null) {
         return;
     }
 
-    // Check lap limit (max 8 laps)
-    if (state.activeLaps.length >= 8) {
-        alert('Maximum 8 laps can be compared at once');
+    // Check lap limit (max 5 laps)
+    if (state.activeLaps.length >= 5) {
+        alert('Maximum 5 laps can be compared at once');
         return;
     }
 
@@ -199,6 +223,7 @@ async function addLapToView(lapId, customColor = null) {
 
         // Update UI
         updateCurrentLapsChips();
+        refreshLapsSidebar(); // Update sidebar to show colored borders
         updateCharts();
 
     } catch (error) {
@@ -210,6 +235,7 @@ async function addLapToView(lapId, customColor = null) {
 function removeLapFromView(lapId) {
     state.activeLaps = state.activeLaps.filter(lap => lap.id !== lapId);
     updateCurrentLapsChips();
+    refreshLapsSidebar(); // Update sidebar to remove colored borders
     updateCharts();
 }
 
@@ -221,6 +247,7 @@ function clearAllLaps() {
         state.clickMarker = null;
     }
     updateCurrentLapsChips();
+    refreshLapsSidebar(); // Update sidebar to remove all colored borders
     document.getElementById('chartsContainer').innerHTML = `
         <div class="text-center py-12">
             <svg class="w-16 h-16 text-neon-cyan mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -756,12 +783,16 @@ async function loadFastestLaps() {
             throw new Error(data.error || 'Failed to load laps');
         }
 
+        // Store data in state for re-rendering
+        state.userLaps = data.user_laps || [];
+        state.teammateLaps = data.teammate_laps || [];
+
         // Render user laps
-        renderLapsList(data.user_laps, 'myLapsContainer', true);
+        renderLapsList(state.userLaps, 'myLapsContainer', true);
 
         // Render teammate laps
         if (state.includeTeam) {
-            renderLapsList(data.teammate_laps, 'teamLapsContainer', false);
+            renderLapsList(state.teammateLaps, 'teamLapsContainer', false);
         } else {
             document.getElementById('teamLapsContainer').innerHTML = `
                 <div class="text-center text-gray-500 py-4 text-sm">
@@ -798,9 +829,10 @@ function renderLapsList(laps, containerId, isUserLaps) {
     container.innerHTML = laps.map(lap => {
         const isActive = state.activeLaps.some(l => l.id === lap.id);
         const activeLap = state.activeLaps.find(l => l.id === lap.id);
+        const borderStyle = isActive ? `border: 3px solid ${activeLap.color};` : '';
 
         return `
-            <div class="glass-card p-3 corner-brackets cursor-pointer hover:shadow-neon-cyan transition-all duration-300 mb-2 ${isActive ? 'border-2 border-neon-cyan' : ''}" onclick="addLapToView(${lap.id})">
+            <div class="glass-card p-3 corner-brackets cursor-pointer hover:shadow-neon-cyan transition-all duration-300 mb-2" style="${borderStyle}" onclick="addLapToView(${lap.id})">
                 ${isActive ? `<span class="inline-block w-3 h-3 rounded-full mb-1" style="background-color: ${activeLap.color};"></span>` : ''}
                 <div class="font-mono text-lg font-bold text-neon-cyan">
                     ${formatLapTime(lap.lap_time)}
@@ -813,6 +845,17 @@ function renderLapsList(laps, containerId, isUserLaps) {
             </div>
         `;
     }).join('');
+}
+
+// Refresh the laps sidebar without re-fetching data
+function refreshLapsSidebar() {
+    // Re-render user laps
+    renderLapsList(state.userLaps, 'myLapsContainer', true);
+
+    // Re-render teammate laps
+    if (state.includeTeam) {
+        renderLapsList(state.teammateLaps, 'teamLapsContainer', false);
+    }
 }
 
 function onFilterChange() {

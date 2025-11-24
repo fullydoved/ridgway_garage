@@ -307,6 +307,21 @@ async function updateCharts() {
         chartContainer.innerHTML = '<div id="telemetryChart"></div>';
 
         const chartData = JSON.parse(data.chart_json);
+
+        // Fix all y-axes to prevent vertical zooming (only allow horizontal zoom)
+        if (chartData.layout) {
+            // Fix main y-axis
+            if (chartData.layout.yaxis) {
+                chartData.layout.yaxis.fixedrange = true;
+            }
+            // Fix all secondary y-axes (yaxis2, yaxis3, etc.)
+            Object.keys(chartData.layout).forEach(key => {
+                if (key.startsWith('yaxis')) {
+                    chartData.layout[key].fixedrange = true;
+                }
+            });
+        }
+
         Plotly.newPlot('telemetryChart', chartData.data, chartData.layout, {responsive: true});
 
         // Add hover event to sync with map

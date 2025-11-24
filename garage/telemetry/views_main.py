@@ -377,14 +377,14 @@ def dashboard_analysis(request):
             pass
 
     elif session_id:
-        print(f"[DEBUG] Preloading all laps from session ID: {session_id}")
+        print(f"[DEBUG] Preloading top 5 fastest laps from session ID: {session_id}")
         try:
             session = Session.objects.select_related('track', 'car').prefetch_related('laps').get(
                 id=session_id,
                 driver=request.user
             )
-            # Get all valid laps from this session ordered by lap number
-            valid_laps = session.laps.filter(is_valid=True, lap_time__gt=0).order_by('lap_number')
+            # Get top 5 fastest valid laps from this session (ordered fastest to slowest)
+            valid_laps = session.laps.filter(is_valid=True, lap_time__gt=0).order_by('lap_time')[:5]
 
             if valid_laps.exists():
                 # Store lap IDs as comma-separated string for JavaScript
@@ -392,7 +392,7 @@ def dashboard_analysis(request):
                 context['preloaded_session_laps'] = lap_ids
                 context['selected_track'] = session.track
                 context['selected_car'] = session.car
-                print(f"[DEBUG] Successfully preloaded {valid_laps.count()} laps from session {session_id}")
+                print(f"[DEBUG] Successfully preloaded {valid_laps.count()} laps from session {session_id} (top 5 fastest)")
             else:
                 print(f"[DEBUG] No valid laps found in session {session_id}")
 
@@ -1395,8 +1395,8 @@ def api_generate_chart(request):
         if not laps:
             return JsonResponse({'error': 'No valid laps found'}, status=404)
 
-        # Color palette
-        colors = ['#00d1b2', '#ff6b6b', '#4ecdc4', '#ffe66d', '#a8dadc', '#f1fa8c', '#ff79c6', '#bd93f9']
+        # Color palette (hot to cold: Red, Orange, Yellow, Green, Blue)
+        colors = ['#FF0000', '#FF8C00', '#FFD700', '#00FF00', '#00BFFF']
 
         # Extract telemetry data
         lap_data = []
