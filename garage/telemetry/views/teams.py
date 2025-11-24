@@ -28,8 +28,8 @@ def team_list(request):
     if search_query:
         user_teams = user_teams.filter(name__icontains=search_query)
 
-    # Public teams (not a member of)
-    public_teams = Team.objects.filter(is_public=True).exclude(members=request.user)
+    # Teams that allow join requests (not a member of)
+    public_teams = Team.objects.filter(allow_join_requests=True).exclude(members=request.user)
 
     if search_query:
         public_teams = public_teams.filter(name__icontains=search_query)

@@ -143,8 +143,11 @@ class UserSettingsForm(forms.ModelForm):
         self.fields['default_team'].required = False
 
         # Filter teams to only those the user is a member of
+        # Query through TeamMembership to ensure fresh data
         if self.user:
-            self.fields['default_team'].queryset = Team.objects.filter(members=self.user)
+            from .models import TeamMembership
+            team_ids = TeamMembership.objects.filter(user=self.user).values_list('team_id', flat=True)
+            self.fields['default_team'].queryset = Team.objects.filter(id__in=team_ids).order_by('name')
 
         # Add timezone choices (common timezones)
         from django.utils import timezone as tz
