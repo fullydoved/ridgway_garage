@@ -121,12 +121,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Check if we have preloaded session laps (multiple laps from same session)
     else if (state.preloadedSessionLaps && state.preloadedSessionLaps.length > 0) {
         console.log(`Preloading ${state.preloadedSessionLaps.length} laps from session`);
-        const gradientColors = generateGradientColors(state.preloadedSessionLaps.length);
 
-        // Load all laps with gradient colors (blue -> red)
-        state.preloadedSessionLaps.forEach((lapId, index) => {
-            console.log(`Loading lap ${lapId} with color ${gradientColors[index]}`);
-            addLapToView(lapId, gradientColors[index]);
+        // Load all laps (colors will be auto-assigned based on lap time)
+        state.preloadedSessionLaps.forEach((lapId) => {
+            console.log(`Loading lap ${lapId}`);
+            addLapToView(lapId);
         });
     }
 
@@ -171,12 +170,30 @@ document.addEventListener('DOMContentLoaded', function() {
 // ============================================================================
 // Lap Loading and Management
 // ============================================================================
+
+// Reassign colors based on lap time order (fastest = red, slowest = blue)
+function reassignLapColors() {
+    if (state.activeLaps.length === 0) return;
+
+    // Sort laps by lap time (fastest first)
+    const sortedLaps = [...state.activeLaps].sort((a, b) => a.data.lap_time - b.data.lap_time);
+
+    // Assign colors based on sorted order
+    sortedLaps.forEach((lap, index) => {
+        lap.color = state.colors[index % state.colors.length];
+    });
+
+    console.log(`Reassigned colors based on lap times`);
+}
+
 async function addLapToView(lapId, customColor = null) {
     console.log(`addLapToView(${lapId}, ${customColor}) called`);
 
-    // Check if lap already loaded
-    if (state.activeLaps.find(l => l.id === lapId)) {
-        console.log(`Lap ${lapId} already loaded, skipping`);
+    // Check if lap already loaded - if so, REMOVE it (toggle behavior)
+    const existingLap = state.activeLaps.find(l => l.id === lapId);
+    if (existingLap) {
+        console.log(`Lap ${lapId} already loaded, removing it (toggle)`);
+        removeLapFromView(lapId);
         return;
     }
 
@@ -198,17 +215,19 @@ async function addLapToView(lapId, customColor = null) {
             return;
         }
 
-        // Add lap to state
-        const color = customColor || getNextColor();
-        console.log(`Adding lap ${lapId} to state with color ${color}`);
+        // Add lap to state (color will be assigned by reassignLapColors)
+        console.log(`Adding lap ${lapId} to state`);
         state.activeLaps.push({
             id: lapId,
-            color: color,
+            color: '#FFFFFF', // Temporary, will be reassigned
             data: data.lap,
             telemetry: data.telemetry
         });
 
         console.log(`State now has ${state.activeLaps.length} laps`);
+
+        // Reassign colors based on lap times (fastest = red, slowest = blue)
+        reassignLapColors();
 
         // If this is the first lap, auto-fill track and car filters
         if (state.activeLaps.length === 1 && data.lap.track_id && data.lap.car_id) {
@@ -233,6 +252,10 @@ async function addLapToView(lapId, customColor = null) {
 
 function removeLapFromView(lapId) {
     state.activeLaps = state.activeLaps.filter(lap => lap.id !== lapId);
+
+    // Reassign colors for remaining laps
+    reassignLapColors();
+
     refreshLapsSidebar(); // Update sidebar to remove colored borders
     updateCharts();
 }

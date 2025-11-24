@@ -113,13 +113,6 @@
             </div>
         </div>
 
-        <!-- Clear All Button -->
-        <div class="flex justify-end mb-4">
-            <button id="clearAllLaps" class="px-4 py-2 text-sm border-2 border-red-500/50 text-red-400 rounded hover:bg-red-500/10 hover:border-red-500 transition-colors font-medium">
-                × Clear All Laps
-            </button>
-        </div>
-
         <!-- Charts Container -->
         <div id="chartsContainer" class="glass-card p-6 corner-brackets mb-6">
             {% if preloaded_lap_id %}
@@ -159,7 +152,12 @@
             →
         </button>
 
-        <h2 class="text-xl font-bold text-neon-cyan mb-4">Fastest Laps</h2>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-neon-cyan">Fastest Laps</h2>
+            <button id="clearAllLaps" class="px-3 py-1.5 text-xs border-2 border-red-500/50 text-red-400 rounded hover:bg-red-500/10 hover:border-red-500 transition-colors font-medium">
+                × Clear All
+            </button>
+        </div>
 
         <!-- My Laps -->
         <div class="mb-6">
