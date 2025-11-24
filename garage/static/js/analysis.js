@@ -837,7 +837,7 @@ function renderLapsList(laps, containerId, isUserLaps) {
         const borderStyle = isActive ? `border: 3px solid ${activeLap.color};` : '';
 
         return `
-            <div class="glass-card p-3 corner-brackets cursor-pointer hover:shadow-neon-cyan transition-all duration-300 mb-2" style="${borderStyle}" onclick="addLapToView(${lap.id})">
+            <div class="glass-card p-3 cursor-pointer hover:shadow-neon-cyan transition-all duration-300 mb-2" style="${borderStyle}" onclick="addLapToView(${lap.id})">
                 ${isActive ? `<span class="inline-block w-3 h-3 rounded-full mb-1" style="background-color: ${activeLap.color};"></span>` : ''}
                 <div class="font-mono text-lg font-bold text-neon-cyan">
                     ${formatLapTime(lap.lap_time)}
