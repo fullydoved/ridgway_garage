@@ -52,6 +52,44 @@ Ridgway Garage is a web-based telemetry analysis platform for iRacing, similar t
 - **Django Storage Abstraction**: Local filesystem (migration-ready for S3/cloud)
 - **django-storages**: S3 integration for future scaling
 
+### Static Files (IMPORTANT)
+
+**⚠️ CRITICAL: `garage/staticfiles/` should NEVER be committed to git**
+
+- `staticfiles/` is a **generated directory** created by Django's `collectstatic` command
+- It's automatically generated on every Docker container startup via `docker-entrypoint.sh`
+- The directory is already in `.gitignore` and should remain there
+- **DO NOT** manually run `collectstatic` in production - Docker does this automatically
+
+**Why this matters:**
+- Committing `staticfiles/` causes merge conflicts when pulling updates
+- Files are owned by root in Docker, causing permission issues
+- The directory contains 130+ auto-generated files that change frequently
+- These files should be ephemeral, not version-controlled
+
+**Automatic startup sequence (docker-entrypoint.sh):**
+1. Wait for PostgreSQL to be ready
+2. Run database migrations (`python manage.py migrate --noinput`)
+3. **Collect static files** (`python manage.py collectstatic --noinput --clear`)
+4. Create superuser if needed
+5. Start Django/Daphne server
+
+**If you accidentally commit staticfiles:**
+```bash
+# Remove from git tracking (keep local files)
+git rm -r --cached garage/staticfiles/
+
+# Commit the removal
+git commit -m "Remove staticfiles from git tracking"
+git push
+```
+
+**Production deployment workflow:**
+```bash
+git pull && docker compose down && docker compose up -d --build
+# That's it! collectstatic runs automatically on container startup
+```
+
 ## Docker Architecture
 
 This project uses **Docker Compose** for development. The following services run in Docker containers:
