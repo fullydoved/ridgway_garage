@@ -101,7 +101,7 @@ def team_detail(request, pk):
         try:
             membership = team.teammembership_set.get(user=request.user)
             user_role = membership.role
-        except:
+        except TeamMembership.DoesNotExist:
             pass
 
     # Get team members with roles

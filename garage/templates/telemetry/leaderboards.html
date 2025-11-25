@@ -101,22 +101,23 @@
                 </thead>
                 <tbody class="divide-y divide-cyber-border">
                     {% for entry in leaderboard_entries %}
+                    {% with rank=page_obj.start_index|add:forloop.counter0 %}
                     <tr class="hover:bg-cyber-dark/30 transition-colors {% if entry.driver == user.username %}leaderboard-user-row{% endif %}">
                         <td class="px-6 py-4 whitespace-nowrap">
-                            {% if forloop.counter == 1 %}
+                            {% if rank == 1 %}
                                 <svg class="w-8 h-8 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
                                 </svg>
-                            {% elif forloop.counter == 2 %}
+                            {% elif rank == 2 %}
                                 <svg class="w-7 h-7" style="color: #c0c0c0;" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
                                 </svg>
-                            {% elif forloop.counter == 3 %}
+                            {% elif rank == 3 %}
                                 <svg class="w-6 h-6" style="color: #cd7f32;" fill="currentColor" viewBox="0 0 24 24">
                                     <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/>
                                 </svg>
                             {% else %}
-                                <strong class="text-neon-cyan text-lg">#{{ forloop.counter }}</strong>
+                                <strong class="text-neon-cyan text-lg">#{{ rank }}</strong>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
@@ -143,7 +144,7 @@
                             {{ entry.car }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="font-mono font-bold text-lg {% if forloop.counter == 1 %}text-ridgway-yellow{% elif forloop.counter == 2 %}text-gray-300{% elif forloop.counter == 3 %}text-orange-400{% else %}text-neon-cyan{% endif %}">
+                            <span class="font-mono font-bold text-lg {% if rank == 1 %}text-ridgway-yellow{% elif rank == 2 %}text-gray-300{% elif rank == 3 %}text-orange-400{% else %}text-neon-cyan{% endif %}">
                                 {{ entry.lap_time|format_laptime }}
                             </span>
                         </td>
@@ -154,19 +155,48 @@
                             </a>
                         </td>
                     </tr>
+                    {% endwith %}
                     {% endfor %}
                 </tbody>
             </table>
         </div>
 
-        <!-- Count Footer -->
+        <!-- Count Footer with Pagination -->
         <div class="px-6 py-4 bg-cyber-dark/30 border-t border-cyber-border">
-            <p class="text-gray-400 text-center flex items-center justify-center gap-2">
+            <p class="text-gray-400 text-center flex items-center justify-center gap-2 mb-4">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                Showing {{ leaderboard_entries|length }} personal best{{ leaderboard_entries|length|pluralize }} time{{ leaderboard_entries|length|pluralize }}
+                Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }} personal best time{{ page_obj.paginator.count|pluralize }}
             </p>
+
+            {% if page_obj.has_other_pages %}
+            <nav class="flex justify-center items-center gap-2" aria-label="Pagination">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if selected_track %}&track={{ selected_track }}{% endif %}{% if selected_car %}&car={{ selected_car }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+                   class="px-4 py-2 rounded-lg border border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan transition-all duration-300">
+                    <svg class="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    Previous
+                </a>
+                {% endif %}
+
+                <span class="px-4 py-2 text-gray-400">
+                    Page <span class="text-neon-cyan font-bold">{{ page_obj.number }}</span> of <span class="text-neon-cyan font-bold">{{ page_obj.paginator.num_pages }}</span>
+                </span>
+
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if selected_track %}&track={{ selected_track }}{% endif %}{% if selected_car %}&car={{ selected_car }}{% endif %}{% if search %}&search={{ search }}{% endif %}"
+                   class="px-4 py-2 rounded-lg border border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan transition-all duration-300">
+                    Next
+                    <svg class="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                {% endif %}
+            </nav>
+            {% endif %}
         </div>
 
         {% else %}

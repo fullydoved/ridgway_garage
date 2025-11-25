@@ -37,7 +37,7 @@ def send_pb_notification(session, lap, is_improvement=False, previous_time=None,
     # Get driver profile (if it exists)
     try:
         driver_profile = user.driver_profile
-    except Exception:
+    except AttributeError:
         logger.debug(f"Driver {user.username} has no driver profile, skipping PB notification")
         return False
 

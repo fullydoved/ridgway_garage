@@ -506,8 +506,8 @@ def parse_ibt_file(self, session_id):
             session.processing_error = str(e)[:500]  # Limit error message length
             session.processing_completed_at = timezone.now()
             session.save()
-        except:
-            pass
+        except Session.DoesNotExist:
+            logger.warning("Session %s not found when updating error status", session_id)
 
         # Retry with exponential backoff
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))

@@ -235,6 +235,36 @@
         </div>
         {% endfor %}
     </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <nav class="mt-8 flex justify-center items-center gap-2" aria-label="Pagination">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if current_track %}&track={{ current_track }}{% endif %}{% if current_car %}&car={{ current_car }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}"
+           class="px-4 py-2 rounded-lg border border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan transition-all duration-300">
+            <svg class="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+            Previous
+        </a>
+        {% endif %}
+
+        <span class="px-4 py-2 text-gray-400">
+            Page <span class="text-neon-cyan font-bold">{{ page_obj.number }}</span> of <span class="text-neon-cyan font-bold">{{ page_obj.paginator.num_pages }}</span>
+        </span>
+
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if current_track %}&track={{ current_track }}{% endif %}{% if current_car %}&car={{ current_car }}{% endif %}{% if current_status %}&status={{ current_status }}{% endif %}"
+           class="px-4 py-2 rounded-lg border border-cyber-border bg-cyber-dark text-gray-300 hover:border-neon-cyan hover:text-neon-cyan transition-all duration-300">
+            Next
+            <svg class="w-5 h-5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+            </svg>
+        </a>
+        {% endif %}
+    </nav>
+    {% endif %}
+
     {% else %}
     <!-- Empty State -->
     <div class="glass-card p-12 corner-brackets text-center">

@@ -25,15 +25,25 @@ from .teams import (
     team_decline_invite,
 )
 
-# Import all other views from views_main.py (temporary during refactoring)
-# These will gradually be split into their own modules
-from ..views_main import (
-    # Helper functions
+# Import API views from the api subpackage
+from .api import (
     api_token_required,
+    api_auth_test,
+    api_upload,
+    api_lap_telemetry,
+    api_fastest_laps,
+    api_generate_chart,
+)
+
+# Import utility functions from utils package
+from ..utils.export import (
     build_lap_export_data,
     compress_lap_export_data,
     import_lap_from_data,
+)
 
+# Import remaining views from views_main.py (to be split into their own modules)
+from ..views_main import (
     # Core views
     home,
     dashboard_analysis,
@@ -48,13 +58,6 @@ from ..views_main import (
     # User settings
     user_settings,
     leaderboards,
-
-    # API endpoints
-    api_auth_test,
-    api_upload,
-    api_lap_telemetry,
-    api_fastest_laps,
-    api_generate_chart,
 )
 
 __all__ = [

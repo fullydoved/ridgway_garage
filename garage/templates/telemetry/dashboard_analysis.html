@@ -188,11 +188,10 @@
 <!-- Leaflet JS for maps -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<!-- Analysis Dashboard JavaScript -->
-<script src="{% static 'js/analysis.js' %}"></script>
+<!-- Analysis Dashboard JavaScript (ES6 Modules) -->
+<script type="module">
+    import { state } from '{% static "js/analysis/main.js" %}';
 
-<!-- Initialize state with template data -->
-<script>
     // Set initial state from Django template
     state.selectedTrackId = {{ selected_track.id|default:"null" }};
     state.selectedCarId = {{ selected_car.id|default:"null" }};

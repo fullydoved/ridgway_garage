@@ -2,10 +2,14 @@
 Plotly chart generation utilities for telemetry visualization.
 """
 
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import logging
 import json
 import math
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+logger = logging.getLogger(__name__)
 
 
 def create_speed_chart(telemetry_data):
@@ -632,8 +636,8 @@ def create_comparison_chart(laps):
                     'data': telemetry.data,
                     'color': colors[len(lap_data) % len(colors)]
                 })
-        except:
-            pass
+        except (AttributeError, TypeError, KeyError) as e:
+            logger.debug("Skipping lap %s due to telemetry access error: %s", lap.id, e)
 
     if len(lap_data) < 2:
         return None
@@ -1024,8 +1028,8 @@ def prepare_comparison_gps_data(laps):
 
                     if gps_data['coordinates']:
                         laps_gps_data.append(gps_data)
-        except:
-            pass
+        except (AttributeError, KeyError, TypeError, ValueError) as e:
+            logger.debug("Skipping lap %s GPS data due to error: %s", lap.id, e)
 
     if not laps_gps_data:
         return None
@@ -1073,8 +1077,8 @@ def create_time_delta_chart(laps):
                         'data': telemetry.data,
                         'color': colors[len(lap_data) % len(colors)]
                     })
-        except:
-            pass
+        except (AttributeError, KeyError, IndexError) as e:
+            logger.debug("Skipping lap %s for delta chart: %s", lap.id, e)
 
     if len(lap_data) < 2:
         return None
