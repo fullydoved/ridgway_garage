@@ -39,7 +39,18 @@ def api_lap_telemetry(request, lap_id):
             # Check if user and driver share any team membership
             user_teams = Team.objects.filter(members=request.user)
             driver_in_user_teams = user_teams.filter(members=lap.session.driver).exists()
+
+            logger.info(
+                "Permission check for lap %s: user=%s, driver=%s, user_teams=%s, driver_in_teams=%s",
+                lap_id, request.user.username, lap.session.driver.username,
+                list(user_teams.values_list('name', flat=True)), driver_in_user_teams
+            )
+
             if not driver_in_user_teams:
+                logger.warning(
+                    "Permission DENIED for lap %s: user=%s has no shared teams with driver=%s",
+                    lap_id, request.user.username, lap.session.driver.username
+                )
                 return JsonResponse({
                     'error': 'You do not have permission to view this lap'
                 }, status=403)
