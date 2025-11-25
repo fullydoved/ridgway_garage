@@ -30,10 +30,6 @@ def api_lap_telemetry(request, lap_id):
     Returns:
         JSON with lap metadata and telemetry data
     """
-    # Debug: Log that we entered the view
-    logger.info("api_lap_telemetry called: lap_id=%s, user=%s, authenticated=%s",
-                lap_id, request.user, request.user.is_authenticated)
-
     try:
         lap = get_object_or_404(Lap, id=lap_id)
 
@@ -47,18 +43,18 @@ def api_lap_telemetry(request, lap_id):
             shared_teams = user_team_ids & driver_team_ids
             driver_in_user_teams = len(shared_teams) > 0
 
-            logger.info(
-                "Permission check for lap %s: user=%s, driver=%s, shared_teams=%s",
-                lap_id, request.user.username, lap.session.driver.username, shared_teams
-            )
-
             if not driver_in_user_teams:
-                logger.warning(
-                    "Permission DENIED for lap %s: user=%s has no shared teams with driver=%s",
-                    lap_id, request.user.username, lap.session.driver.username
-                )
                 return JsonResponse({
-                    'error': 'You do not have permission to view this lap'
+                    'error': 'You do not have permission to view this lap',
+                    'debug': {
+                        'request_user': request.user.username,
+                        'request_user_id': request.user.id,
+                        'lap_driver': lap.session.driver.username,
+                        'lap_driver_id': lap.session.driver.id,
+                        'user_team_ids': list(user_team_ids),
+                        'driver_team_ids': list(driver_team_ids),
+                        'shared_teams': list(shared_teams),
+                    }
                 }, status=403)
 
         # Get telemetry data
