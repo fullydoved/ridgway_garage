@@ -30,6 +30,10 @@ def api_lap_telemetry(request, lap_id):
     Returns:
         JSON with lap metadata and telemetry data
     """
+    # Debug: Log that we entered the view
+    logger.info("api_lap_telemetry called: lap_id=%s, user=%s, authenticated=%s",
+                lap_id, request.user, request.user.is_authenticated)
+
     try:
         lap = get_object_or_404(Lap, id=lap_id)
 
