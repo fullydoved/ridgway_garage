@@ -41,13 +41,15 @@ def api_lap_telemetry(request, lap_id):
         # Allow if: user owns the session, or user shares a team with the session's driver
         if lap.session.driver != request.user:
             # Check if user and driver share any team membership
-            user_teams = Team.objects.filter(members=request.user)
-            driver_in_user_teams = user_teams.filter(members=lap.session.driver).exists()
+            # Get team IDs for both users and check for intersection
+            user_team_ids = set(Team.objects.filter(members=request.user).values_list('id', flat=True))
+            driver_team_ids = set(Team.objects.filter(members=lap.session.driver).values_list('id', flat=True))
+            shared_teams = user_team_ids & driver_team_ids
+            driver_in_user_teams = len(shared_teams) > 0
 
             logger.info(
-                "Permission check for lap %s: user=%s, driver=%s, user_teams=%s, driver_in_teams=%s",
-                lap_id, request.user.username, lap.session.driver.username,
-                list(user_teams.values_list('name', flat=True)), driver_in_user_teams
+                "Permission check for lap %s: user=%s, driver=%s, shared_teams=%s",
+                lap_id, request.user.username, lap.session.driver.username, shared_teams
             )
 
             if not driver_in_user_teams:
@@ -230,9 +232,9 @@ def api_generate_chart(request):
 
             # Check permissions - allow if user owns session or shares a team with driver
             if lap.session.driver != request.user:
-                user_teams = Team.objects.filter(members=request.user)
-                driver_in_user_teams = user_teams.filter(members=lap.session.driver).exists()
-                if not driver_in_user_teams:
+                user_team_ids = set(Team.objects.filter(members=request.user).values_list('id', flat=True))
+                driver_team_ids = set(Team.objects.filter(members=lap.session.driver).values_list('id', flat=True))
+                if not (user_team_ids & driver_team_ids):
                     continue
 
             laps.append(lap)
