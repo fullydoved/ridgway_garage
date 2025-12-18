@@ -133,7 +133,7 @@
                         <select id="id_default_team" name="default_team" class="input-neon">
                             <option value="">---------</option>
                             {% for team in settings_form.default_team.field.queryset %}
-                            <option value="{{ team.id }}" {% if settings_form.default_team.value == team.id|stringformat:"s" %}selected{% endif %}>
+                            <option value="{{ team.id }}" {% if driver_profile.default_team_id == team.id %}selected{% endif %}>
                                 {{ team.name }}
                             </option>
                             {% endfor %}
