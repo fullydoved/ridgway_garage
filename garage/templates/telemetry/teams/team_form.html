@@ -142,6 +142,34 @@
                         {% endif %}
                     </div>
                 </div>
+
+                {% if user.is_superuser %}
+                <!-- Default Team (Admin Only) -->
+                <div class="flex items-start gap-3 p-4 rounded-lg bg-ridgway-yellow/10 border border-ridgway-yellow/30">
+                    <input type="checkbox"
+                           name="{{ form.is_default_team.name }}"
+                           id="{{ form.is_default_team.id_for_label }}"
+                           class="mt-1 w-5 h-5 rounded border-2 border-ridgway-yellow/50 bg-cyber-dark text-ridgway-yellow focus:ring-2 focus:ring-ridgway-yellow/30"
+                           {% if form.is_default_team.value %}checked{% endif %}>
+                    <div class="flex-1">
+                        <label for="{{ form.is_default_team.id_for_label }}" class="text-ridgway-yellow font-semibold cursor-pointer block mb-1">
+                            <svg class="w-4 h-4 inline-block mr-1 -mt-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                            {{ form.is_default_team.label }}
+                        </label>
+                        {% if form.is_default_team.help_text %}
+                        <p class="text-gray-400 text-sm">{{ form.is_default_team.help_text }}</p>
+                        {% endif %}
+                        <p class="text-ridgway-yellow/70 text-xs mt-2">
+                            <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                            </svg>
+                            Admin setting: New users will automatically join this team
+                        </p>
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Form Actions -->

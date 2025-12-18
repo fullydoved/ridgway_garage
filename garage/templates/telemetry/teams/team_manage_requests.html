@@ -39,10 +39,10 @@
                     <div class="flex-1">
                         <div class="flex items-center gap-3 mb-3">
                             <div class="w-12 h-12 rounded-full bg-neon-cyan/20 border border-neon-cyan/50 flex items-center justify-center text-neon-cyan font-bold text-xl">
-                                {{ request.user.username|slice:":1"|upper }}
+                                {{ request.user.driver_profile.display_name|default:request.user.username|slice:":1"|upper }}
                             </div>
                             <div>
-                                <h3 class="text-xl font-bold text-white">{{ request.user.username }}</h3>
+                                <h3 class="text-xl font-bold text-white">{{ request.user.driver_profile.display_name|default:request.user.username }}</h3>
                                 <p class="text-sm text-gray-400">Requested {{ request.created_at|timesince }} ago</p>
                             </div>
                         </div>
@@ -102,12 +102,12 @@
             <div class="glass-card p-4 flex justify-between items-center">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full bg-cyber-dark border border-cyber-border flex items-center justify-center text-gray-400 font-bold">
-                        {{ request.user.username|slice:":1"|upper }}
+                        {{ request.user.driver_profile.display_name|default:request.user.username|slice:":1"|upper }}
                     </div>
                     <div>
-                        <strong class="text-white">{{ request.user.username }}</strong>
+                        <strong class="text-white">{{ request.user.driver_profile.display_name|default:request.user.username }}</strong>
                         <p class="text-sm text-gray-400">
-                            {{ request.reviewed_at|timesince }} ago by {{ request.reviewed_by.username }}
+                            {{ request.reviewed_at|timesince }} ago by {{ request.reviewed_by.driver_profile.display_name|default:request.reviewed_by.username }}
                         </p>
                     </div>
                 </div>

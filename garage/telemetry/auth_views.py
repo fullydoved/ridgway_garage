@@ -1,8 +1,9 @@
 """
 Custom authentication views for Ridgway Garage.
-Replaces django-allauth with simple username/email/password auth.
+Email-based authentication with display name for user profiles.
 """
 
+import uuid
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.models import User
@@ -12,13 +13,12 @@ from django import forms
 
 
 class LoginForm(forms.Form):
-    """Simple login form with username and password."""
-    username = forms.CharField(
-        max_length=150,
-        widget=forms.TextInput(attrs={
+    """Login form with email and password."""
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={
             'class': 'input-neon',
-            'placeholder': 'Username',
-            'autocomplete': 'username'
+            'placeholder': 'Email',
+            'autocomplete': 'email'
         })
     )
     password = forms.CharField(
@@ -31,13 +31,13 @@ class LoginForm(forms.Form):
 
 
 class RegisterForm(forms.Form):
-    """Registration form with username, email, and password confirmation."""
-    username = forms.CharField(
-        max_length=150,
+    """Registration form with display name, email, and password confirmation."""
+    display_name = forms.CharField(
+        max_length=100,
         widget=forms.TextInput(attrs={
             'class': 'input-neon',
-            'placeholder': 'Username',
-            'autocomplete': 'username'
+            'placeholder': 'Display Name',
+            'autocomplete': 'name'
         })
     )
     email = forms.EmailField(
@@ -63,13 +63,6 @@ class RegisterForm(forms.Form):
         })
     )
 
-    def clean_username(self):
-        """Validate username is unique."""
-        username = self.cleaned_data['username']
-        if User.objects.filter(username=username).exists():
-            raise forms.ValidationError('Username already taken.')
-        return username
-
     def clean_email(self):
         """Validate email is unique."""
         email = self.cleaned_data['email']
@@ -89,10 +82,24 @@ class RegisterForm(forms.Form):
         return cleaned_data
 
 
+def generate_username_from_email(email):
+    """Generate unique username from email address."""
+    base = email.split('@')[0][:30]  # Email prefix, max 30 chars
+    # Clean up base - remove special characters
+    base = ''.join(c for c in base if c.isalnum() or c in '_-')
+    if not base:
+        base = 'user'
+    username = base
+    # If username exists, append random suffix
+    while User.objects.filter(username=username).exists():
+        username = f"{base}_{uuid.uuid4().hex[:6]}"
+    return username
+
+
 @require_http_methods(["GET", "POST"])
 def login_view(request):
     """
-    Login view with username and password.
+    Login view with email and password.
     GET: Show login form
     POST: Authenticate and log in user
     """
@@ -103,19 +110,31 @@ def login_view(request):
     if request.method == 'POST':
         form = LoginForm(request.POST)
         if form.is_valid():
-            username = form.cleaned_data['username']
+            email = form.cleaned_data['email']
             password = form.cleaned_data['password']
 
-            user = authenticate(request, username=username, password=password)
+            # Find user by email
+            try:
+                user_obj = User.objects.get(email=email)
+            except User.DoesNotExist:
+                messages.error(request, 'Invalid email or password.')
+                return render(request, 'login.html', {'form': form})
+
+            # Authenticate with username (Django requirement)
+            user = authenticate(request, username=user_obj.username, password=password)
             if user is not None:
                 auth_login(request, user)
-                messages.success(request, f'Welcome back, {user.username}!')
+                # Get display name from driver profile
+                display_name = user.username
+                if hasattr(user, 'driver_profile') and user.driver_profile.display_name:
+                    display_name = user.driver_profile.display_name
+                messages.success(request, f'Welcome back, {display_name}!')
 
                 # Redirect to next URL or home
                 next_url = request.GET.get('next', 'telemetry:home')
                 return redirect(next_url)
             else:
-                messages.error(request, 'Invalid username or password.')
+                messages.error(request, 'Invalid email or password.')
     else:
         form = LoginForm()
 
@@ -125,7 +144,7 @@ def login_view(request):
 @require_http_methods(["GET", "POST"])
 def register_view(request):
     """
-    Registration view with username, email, and password.
+    Registration view with display name, email, and password.
     GET: Show registration form
     POST: Create new user and log them in
     """
@@ -136,16 +155,25 @@ def register_view(request):
     if request.method == 'POST':
         form = RegisterForm(request.POST)
         if form.is_valid():
+            # Generate unique username from email
+            username = generate_username_from_email(form.cleaned_data['email'])
+
             # Create user
             user = User.objects.create_user(
-                username=form.cleaned_data['username'],
+                username=username,
                 email=form.cleaned_data['email'],
                 password=form.cleaned_data['password']
             )
 
+            # Update driver profile with display name
+            # (Driver profile is auto-created via signal)
+            if hasattr(user, 'driver_profile'):
+                user.driver_profile.display_name = form.cleaned_data['display_name']
+                user.driver_profile.save(update_fields=['display_name'])
+
             # Log in the new user
             auth_login(request, user)
-            messages.success(request, f'Account created successfully! Welcome, {user.username}!')
+            messages.success(request, f'Account created successfully! Welcome, {form.cleaned_data["display_name"]}!')
 
             return redirect('telemetry:home')
     else:

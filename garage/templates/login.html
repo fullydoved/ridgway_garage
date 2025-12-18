@@ -30,14 +30,14 @@
                     </div>
                 {% endif %}
 
-                <!-- Username Field -->
+                <!-- Email Field -->
                 <div>
-                    <label for="{{ form.username.id_for_label }}" class="form-label">
-                        Username
+                    <label for="{{ form.email.id_for_label }}" class="form-label">
+                        Email
                     </label>
-                    {{ form.username }}
-                    {% if form.username.errors %}
-                        {% for error in form.username.errors %}
+                    {{ form.email }}
+                    {% if form.email.errors %}
+                        {% for error in form.email.errors %}
                             <p class="form-error">{{ error }}</p>
                         {% endfor %}
                     {% endif %}

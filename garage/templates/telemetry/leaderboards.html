@@ -102,7 +102,7 @@
                 <tbody class="divide-y divide-cyber-border">
                     {% for entry in leaderboard_entries %}
                     {% with rank=page_obj.start_index|add:forloop.counter0 %}
-                    <tr class="hover:bg-cyber-dark/30 transition-colors {% if entry.driver == user.username %}leaderboard-user-row{% endif %}">
+                    <tr class="hover:bg-cyber-dark/30 transition-colors {% if entry.driver_id == user.id %}leaderboard-user-row{% endif %}">
                         <td class="px-6 py-4 whitespace-nowrap">
                             {% if rank == 1 %}
                                 <svg class="w-8 h-8 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
@@ -126,7 +126,7 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                                 </svg>
                                 <strong class="text-white">{{ entry.driver }}</strong>
-                                {% if entry.driver == user.username %}
+                                {% if entry.driver_id == user.id %}
                                     <span class="inline-block px-2 py-1 rounded text-xs font-semibold bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/50">You</span>
                                 {% endif %}
                             </div>

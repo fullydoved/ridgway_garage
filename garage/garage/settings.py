@@ -65,10 +65,6 @@ INSTALLED_APPS = [
     'django_celery_results',  # Optional: store Celery results in database
     # Note: We use Leaflet.js directly in templates, not django-leaflet (requires GDAL)
 
-    # Django Allauth for authentication
-    'allauth',
-    'allauth.account',
-
     # Local apps
     'telemetry',
 ]
@@ -85,7 +81,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'allauth.account.middleware.AccountMiddleware',  # Required for django-allauth
 ]
 
 ROOT_URLCONF = 'garage.urls'
@@ -159,26 +154,10 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
 
-# Authentication Backends (Django Allauth)
+# Authentication Backends
 AUTHENTICATION_BACKENDS = [
-    # Needed to login by username in Django admin, regardless of `allauth`
     'django.contrib.auth.backends.ModelBackend',
-
-    # `allauth` specific authentication methods, such as login by email
-    'allauth.account.auth_backends.AuthenticationBackend',
 ]
-
-# Django Allauth Configuration
-SITE_ID = 1
-
-# Allauth settings
-ACCOUNT_EMAIL_REQUIRED = False  # Don't require email (no email server configured)
-ACCOUNT_USERNAME_REQUIRED = True
-ACCOUNT_AUTHENTICATION_METHOD = 'username'  # Login with username only
-ACCOUNT_EMAIL_VERIFICATION = 'none'  # Disable email verification (no email server)
-ACCOUNT_SIGNUP_EMAIL_ENTER_TWICE = False
-ACCOUNT_SESSION_REMEMBER = True  # Remember logged-in users
-ACCOUNT_LOGOUT_ON_GET = False  # Require POST to logout (security)
 
 # Email backend - use console backend (logs emails instead of sending)
 # Change to 'django.core.mail.backends.smtp.EmailBackend' when email server is configured
@@ -186,8 +165,7 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Login/logout redirects
 LOGIN_REDIRECT_URL = '/'
-ACCOUNT_LOGOUT_REDIRECT_URL = '/'
-LOGIN_URL = '/accounts/login/'
+LOGIN_URL = '/login/'
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

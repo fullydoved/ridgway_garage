@@ -736,6 +736,7 @@ def leaderboards(request):
             ).values(
                 'session__driver',
                 'session__driver__username',
+                'session__driver__driver_profile__display_name',
                 'session__track__name',
                 'session__track__configuration',
                 'session__car__name'
@@ -747,6 +748,7 @@ def leaderboards(request):
             if search:
                 best_laps = best_laps.filter(
                     Q(session__driver__username__icontains=search) |
+                    Q(session__driver__driver_profile__display_name__icontains=search) |
                     Q(session__track__name__icontains=search) |
                     Q(session__car__name__icontains=search)
                 )
@@ -766,8 +768,13 @@ def leaderboards(request):
                     if lap_data['session__track__configuration']:
                         track_name += f" - {lap_data['session__track__configuration']}"
 
+                    # Use display_name if available, fall back to username
+                    display_name = lap_data.get('session__driver__driver_profile__display_name')
+                    driver_name = display_name if display_name else lap_data['session__driver__username']
+
                     leaderboard_entries.append({
-                        'driver': lap_data['session__driver__username'],
+                        'driver': driver_name,
+                        'driver_id': lap_data['session__driver'],
                         'track': track_name,
                         'car': lap_data['session__car__name'],
                         'lap_time': lap_data['best_time'],

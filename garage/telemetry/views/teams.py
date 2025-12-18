@@ -62,6 +62,9 @@ def team_create(request):
         if form.is_valid():
             team = form.save(commit=False)
             team.owner = request.user
+            # Only superusers can set is_default_team
+            if not request.user.is_superuser:
+                team.is_default_team = False
             team.save()
 
             # Add creator as team member with owner role
@@ -139,6 +142,9 @@ def team_edit(request, pk):
     if request.method == 'POST':
         form = TeamForm(request.POST, instance=team)
         if form.is_valid():
+            # Only superusers can change is_default_team
+            if not request.user.is_superuser:
+                form.instance.is_default_team = team.is_default_team  # Preserve original value
             form.save()
             messages.success(request, f'Team "{team.name}" updated successfully!')
             return redirect('telemetry:team_detail', pk=pk)
