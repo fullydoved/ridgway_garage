@@ -349,7 +349,33 @@ def parse_ibt_file(self, session_id, skip_notifications=False):
                     invalid_reason = f"Incomplete lap (time: {lap_time:.3f}s)"
                     logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
 
-                # Check 1b: Reset detection via position teleportation
+                # Check 1a: Incomplete lap detection via LapDistPct
+                # A valid lap must complete the full track distance
+                # When someone resets mid-lap, LapDistPct only reaches the % where they reset
+                if is_valid and 'LapDistPct' in lap_telemetry:
+                    lap_dist_pct = lap_telemetry['LapDistPct']
+                    if len(lap_dist_pct) > 0:
+                        max_lap_dist_pct = max(lap_dist_pct)
+                        MIN_COMPLETION_PCT = 0.998  # 99.8% - catch resets near finish line
+                        if max_lap_dist_pct < MIN_COMPLETION_PCT:
+                            is_valid = False
+                            invalid_reason = f"Incomplete lap ({max_lap_dist_pct*100:.1f}% completed)"
+                            logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
+
+                # Check 1b: Impossible average speed detection (failsafe for missing GPS)
+                # When GPS data is missing, position jump check is skipped
+                # This provides a physics-based failsafe - no car can average 350+ km/h
+                if is_valid and session.track and session.track.length_km:
+                    track_length_km = float(session.track.length_km)
+                    if lap_time > 0:
+                        implied_avg_speed_kmh = track_length_km / (lap_time / 3600)
+                        MAX_POSSIBLE_AVG_SPEED = 350  # km/h - generous for IndyCar ovals
+                        if implied_avg_speed_kmh > MAX_POSSIBLE_AVG_SPEED:
+                            is_valid = False
+                            invalid_reason = f"Impossible avg speed ({implied_avg_speed_kmh:.0f} km/h)"
+                            logger.debug(f"Lap {lap_number} invalid: {invalid_reason}")
+
+                # Check 1c: Reset detection via position teleportation
                 # When driver resets, their position jumps 100+ meters instantly
                 if is_valid and 'Lat' in lap_telemetry and 'Lon' in lap_telemetry:
                     import math
