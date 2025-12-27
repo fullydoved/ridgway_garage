@@ -289,21 +289,37 @@ def parse_ibt_file(self, session_id):
                 # Extract telemetry for this lap only
                 lap_telemetry = {}
                 for channel, data in telemetry_data.items():
-                    if isinstance(data, list) and len(data) > end_idx:
+                    # Use >= to include the last lap of a session where end_idx == len(data)
+                    if isinstance(data, list) and len(data) >= end_idx and start_idx < len(data):
                         lap_telemetry[channel] = data[start_idx:end_idx]
 
                 # Get official lap time from iRacing's LapLastLapTime
-                # This value is set at the moment you cross the start/finish line,
-                # so we look at the first sample of the NEXT lap (or end of current lap)
+                # IMPORTANT: LapLastLapTime updates ~10 samples AFTER the Lap channel changes.
+                # At end_idx (first sample of next lap), it still shows the PREVIOUS lap's time!
+                # We need to read from the MIDDLE of the next lap where the value has stabilized.
                 lap_time = 0.0
                 if 'LapLastLapTime' in telemetry_data:
                     lap_last_times = telemetry_data['LapLastLapTime']
-                    # Check the sample right after this lap ends (start of next lap)
-                    if end_idx < len(lap_last_times):
-                        official_time = lap_last_times[end_idx]
+
+                    # Find the next lap's sample range
+                    next_lap_number = lap_number + 1
+                    next_lap_indices = np.where(lap_array == next_lap_number)[0]
+
+                    if len(next_lap_indices) > 20:
+                        # Read from middle of next lap where LapLastLapTime has updated
+                        mid_next_lap_idx = next_lap_indices[len(next_lap_indices) // 2]
+                        official_time = lap_last_times[mid_next_lap_idx]
                         if official_time and official_time > 0:
                             lap_time = official_time
-                            logger.debug(f"Lap {lap_number}: Using official LapLastLapTime = {lap_time:.4f}s")
+                            logger.debug(f"Lap {lap_number}: Using official LapLastLapTime = {lap_time:.4f}s (from mid-next-lap)")
+                    elif len(next_lap_indices) > 0:
+                        # Next lap is short, try reading 15 samples after it starts
+                        read_idx = next_lap_indices[0] + 15
+                        if read_idx < len(lap_last_times):
+                            official_time = lap_last_times[read_idx]
+                            if official_time and official_time > 0:
+                                lap_time = official_time
+                                logger.debug(f"Lap {lap_number}: Using official LapLastLapTime = {lap_time:.4f}s (from next-lap+15)")
 
                 # Fallback: Calculate from SessionTime if LapLastLapTime not available
                 if lap_time == 0.0:
