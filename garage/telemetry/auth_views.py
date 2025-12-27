@@ -1,14 +1,23 @@
 """
 Custom authentication views for Ridgway Garage.
 Email-based authentication with display name for user profiles.
+Includes password reset functionality via email.
 """
 
 import uuid
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login as auth_login, logout as auth_logout
 from django.contrib.auth.models import User
+from django.contrib.auth.views import (
+    PasswordResetView,
+    PasswordResetDoneView,
+    PasswordResetConfirmView,
+    PasswordResetCompleteView,
+)
+from django.contrib.auth.forms import PasswordResetForm, SetPasswordForm
 from django.contrib import messages
 from django.views.decorators.http import require_http_methods
+from django.urls import reverse_lazy
 from django import forms
 
 
@@ -191,3 +200,76 @@ def logout_view(request):
     auth_logout(request)
     messages.info(request, 'You have been logged out.')
     return redirect('telemetry:home')
+
+
+# =============================================================================
+# Password Reset Views
+# =============================================================================
+
+class CustomPasswordResetForm(PasswordResetForm):
+    """Custom password reset form with cyberpunk styling."""
+    email = forms.EmailField(
+        max_length=254,
+        widget=forms.EmailInput(attrs={
+            'class': 'input-neon',
+            'placeholder': 'Email Address',
+            'autocomplete': 'email'
+        })
+    )
+
+
+class CustomSetPasswordForm(SetPasswordForm):
+    """Custom set password form with cyberpunk styling."""
+    new_password1 = forms.CharField(
+        widget=forms.PasswordInput(attrs={
+            'class': 'input-neon',
+            'placeholder': 'New Password',
+            'autocomplete': 'new-password'
+        })
+    )
+    new_password2 = forms.CharField(
+        widget=forms.PasswordInput(attrs={
+            'class': 'input-neon',
+            'placeholder': 'Confirm New Password',
+            'autocomplete': 'new-password'
+        })
+    )
+
+
+class CustomPasswordResetView(PasswordResetView):
+    """Password reset request view - enter email to receive reset link."""
+    template_name = 'account/password_reset.html'
+    email_template_name = 'account/password_reset_email.html'
+    subject_template_name = 'account/password_reset_subject.txt'
+    form_class = CustomPasswordResetForm
+    success_url = reverse_lazy('password_reset_done')
+
+    def form_valid(self, form):
+        """Add success message when email is sent."""
+        messages.success(
+            self.request,
+            'If an account exists with that email, you will receive a password reset link shortly.'
+        )
+        return super().form_valid(form)
+
+
+class CustomPasswordResetDoneView(PasswordResetDoneView):
+    """Password reset done view - shows confirmation that email was sent."""
+    template_name = 'account/password_reset_done.html'
+
+
+class CustomPasswordResetConfirmView(PasswordResetConfirmView):
+    """Password reset confirm view - enter new password."""
+    template_name = 'account/password_reset_confirm.html'
+    form_class = CustomSetPasswordForm
+    success_url = reverse_lazy('password_reset_complete')
+
+    def form_valid(self, form):
+        """Add success message when password is changed."""
+        messages.success(self.request, 'Your password has been reset successfully!')
+        return super().form_valid(form)
+
+
+class CustomPasswordResetCompleteView(PasswordResetCompleteView):
+    """Password reset complete view - shows success message."""
+    template_name = 'account/password_reset_complete.html'

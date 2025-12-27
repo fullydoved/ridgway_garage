@@ -159,9 +159,19 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# Email backend - use console backend (logs emails instead of sending)
-# Change to 'django.core.mail.backends.smtp.EmailBackend' when email server is configured
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Email Configuration
+# SendGrid SMTP settings (or use console backend for development)
+EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.sendgrid.net')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='apikey')  # SendGrid uses 'apikey' as username
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')  # SendGrid API key
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@ridgwaygarage.com')
+SERVER_EMAIL = config('SERVER_EMAIL', default='noreply@ridgwaygarage.com')
+
+# Password reset token expiry (in seconds) - default 24 hours
+PASSWORD_RESET_TIMEOUT = config('PASSWORD_RESET_TIMEOUT', default=86400, cast=int)
 
 # Login/logout redirects
 LOGIN_REDIRECT_URL = '/'
@@ -284,8 +294,8 @@ if not DEBUG:
     SECURE_SSL_REDIRECT = True  # Redirect HTTP to HTTPS
 
 # Session Security
-SESSION_COOKIE_AGE = 86400  # 24 hours
-SESSION_SAVE_EVERY_REQUEST = True  # Refresh session on activity
+SESSION_COOKIE_AGE = 5184000  # 60 days
+SESSION_SAVE_EVERY_REQUEST = True  # Refresh session on activity (resets the 60-day timer)
 SESSION_COOKIE_SECURE = not DEBUG  # HTTPS only in production
 SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access
 SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection

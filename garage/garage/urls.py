@@ -29,8 +29,19 @@ urlpatterns = [
     path('register/', auth_views.register_view, name='register'),
     path('logout/', auth_views.logout_view, name='logout'),
 
-    # Django Allauth (authentication and social auth) - DEPRECATED, kept for backwards compatibility
-    # path('accounts/', include('allauth.urls')),
+    # Password Reset URLs
+    path('password-reset/',
+         auth_views.CustomPasswordResetView.as_view(),
+         name='password_reset'),
+    path('password-reset/done/',
+         auth_views.CustomPasswordResetDoneView.as_view(),
+         name='password_reset_done'),
+    path('password-reset/confirm/<uidb64>/<token>/',
+         auth_views.CustomPasswordResetConfirmView.as_view(),
+         name='password_reset_confirm'),
+    path('password-reset/complete/',
+         auth_views.CustomPasswordResetCompleteView.as_view(),
+         name='password_reset_complete'),
 
     # Telemetry app URLs
     path('', include('telemetry.urls')),
