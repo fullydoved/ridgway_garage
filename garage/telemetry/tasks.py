@@ -37,7 +37,7 @@ def send_processing_update(session_id, status, progress, message='', current_ste
 
 
 @shared_task(bind=True, max_retries=3)
-def parse_ibt_file(self, session_id):
+def parse_ibt_file(self, session_id, skip_notifications=False):
     """
     Parse an IBT telemetry file and extract session, lap, and telemetry data.
 
@@ -46,6 +46,7 @@ def parse_ibt_file(self, session_id):
 
     Args:
         session_id: Primary key of the Session object to process
+        skip_notifications: If True, skip Discord notifications (useful for re-parsing)
     """
     from .models import Session, Lap, TelemetryData, Track, Car
     import irsdk
@@ -443,11 +444,6 @@ def parse_ibt_file(self, session_id):
 
             # Check for personal best using proper global PB tracking
             from telemetry.utils.pb_tracker import update_personal_bests
-            from telemetry.services.discord_notifications import (
-                send_pb_notification,
-                check_team_record,
-                send_team_record_notification
-            )
 
             is_new_pb, previous_time, improvement = update_personal_bests(session)
 
@@ -460,17 +456,23 @@ def parse_ibt_file(self, session_id):
                         + (f" - improved by {improvement}s" if improvement else " - first PB")
                     )
 
-                    # Send Discord notification to team channel
-                    send_pb_notification(
-                        session=session,
-                        lap=pb_lap,
-                        is_improvement=(previous_time is not None),
-                        previous_time=previous_time,
-                        improvement=improvement
-                    )
+                    # Send Discord notification (unless skipped for re-parsing)
+                    if not skip_notifications:
+                        from telemetry.services.discord_notifications import send_pb_notification
+                        send_pb_notification(
+                            session=session,
+                            lap=pb_lap,
+                            is_improvement=(previous_time is not None),
+                            previous_time=previous_time,
+                            improvement=improvement
+                        )
 
             # Check for team record (best lap in session for this team/track/car)
-            if session.team:
+            if session.team and not skip_notifications:
+                from telemetry.services.discord_notifications import (
+                    check_team_record,
+                    send_team_record_notification
+                )
                 best_lap = session.laps.filter(is_valid=True, lap_time__gt=0).order_by('lap_time').first()
                 if best_lap:
                     is_team_record, prev_record_time, prev_holder = check_team_record(session, best_lap)

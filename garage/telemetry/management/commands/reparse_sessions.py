@@ -135,7 +135,8 @@ class Command(BaseCommand):
                 )
 
                 # Call the task function directly (synchronously)
-                parse_ibt_file(session.id)
+                # Skip notifications to avoid spamming Discord during re-parse
+                parse_ibt_file(session.id, skip_notifications=True)
 
                 # Refresh session from DB
                 session.refresh_from_db()
