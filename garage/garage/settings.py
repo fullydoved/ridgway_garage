@@ -160,15 +160,15 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # Email Configuration
-# SendGrid SMTP settings (or use console backend for development)
+# Gmail SMTP settings (or use console backend for development)
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
-EMAIL_HOST = config('EMAIL_HOST', default='smtp.sendgrid.net')
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
 EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='apikey')  # SendGrid uses 'apikey' as username
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')  # SendGrid API key
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@ridgwaygarage.com')
-SERVER_EMAIL = config('SERVER_EMAIL', default='noreply@ridgwaygarage.com')
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')  # Gmail address
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')  # Gmail App Password
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='')
+SERVER_EMAIL = config('SERVER_EMAIL', default='')
 
 # Password reset token expiry (in seconds) - default 24 hours
 PASSWORD_RESET_TIMEOUT = config('PASSWORD_RESET_TIMEOUT', default=86400, cast=int)
