@@ -291,7 +291,8 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SECURE_SSL_REDIRECT = True  # Redirect HTTP to HTTPS
+    # Disable SSL redirect if nginx handles SSL termination (default: False to avoid redirect loops)
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
 
 # Session Security
 SESSION_COOKIE_AGE = 5184000  # 60 days
