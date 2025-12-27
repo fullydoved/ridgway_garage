@@ -67,6 +67,7 @@ celerybeat.pid
 !README.md
 !CONTRIBUTING.md
 !LICENSE.md
+!DISCLAIMER.md
 
 # iRacing telemetry files (user uploads)
 *.ibt
