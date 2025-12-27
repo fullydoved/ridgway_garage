@@ -202,6 +202,7 @@ def parse_ibt_file(self, session_id):
         # Common telemetry channels we want to extract
         channels = [
             'Lap', 'LapDist', 'LapDistPct', 'SessionTime', 'Speed',
+            'LapLastLapTime', 'LapCurrentLapTime',  # Official iRacing lap times
             'Throttle', 'Brake', 'Clutch', 'Gear', 'RPM', 'SteeringWheelAngle',
             'Lat', 'Lon', 'Alt',  # GPS data
             # Tire surface temps (these change dynamically during the lap)
@@ -291,11 +292,24 @@ def parse_ibt_file(self, session_id):
                     if isinstance(data, list) and len(data) > end_idx:
                         lap_telemetry[channel] = data[start_idx:end_idx]
 
-                # Calculate lap time from SessionTime difference
-                if 'SessionTime' in lap_telemetry and len(lap_telemetry['SessionTime']) > 1:
-                    lap_time = lap_telemetry['SessionTime'][-1] - lap_telemetry['SessionTime'][0]
-                else:
-                    lap_time = 0.0
+                # Get official lap time from iRacing's LapLastLapTime
+                # This value is set at the moment you cross the start/finish line,
+                # so we look at the first sample of the NEXT lap (or end of current lap)
+                lap_time = 0.0
+                if 'LapLastLapTime' in telemetry_data:
+                    lap_last_times = telemetry_data['LapLastLapTime']
+                    # Check the sample right after this lap ends (start of next lap)
+                    if end_idx < len(lap_last_times):
+                        official_time = lap_last_times[end_idx]
+                        if official_time and official_time > 0:
+                            lap_time = official_time
+                            logger.debug(f"Lap {lap_number}: Using official LapLastLapTime = {lap_time:.4f}s")
+
+                # Fallback: Calculate from SessionTime if LapLastLapTime not available
+                if lap_time == 0.0:
+                    if 'SessionTime' in lap_telemetry and len(lap_telemetry['SessionTime']) > 1:
+                        lap_time = lap_telemetry['SessionTime'][-1] - lap_telemetry['SessionTime'][0]
+                        logger.debug(f"Lap {lap_number}: Fallback to calculated time = {lap_time:.4f}s")
 
                 # Calculate statistics
                 # Convert speed from m/s to km/h (multiply by 3.6)
