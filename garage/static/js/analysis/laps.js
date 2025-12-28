@@ -220,19 +220,19 @@ export function renderLapsList(laps, containerId, isUserLaps) {
     container.innerHTML = laps.map(lap => {
         const isActive = state.activeLaps.some(l => l.id === lap.id);
         const activeLap = state.activeLaps.find(l => l.id === lap.id);
-        const borderStyle = isActive ? `border: 3px solid ${activeLap.color};` : '';
+        const borderColor = isActive ? activeLap.color : 'transparent';
 
         return `
-            <div class="glass-card p-3 cursor-pointer hover:shadow-neon-cyan transition-all duration-300 mb-2" style="${borderStyle}" onclick="window.addLapToView(${lap.id})">
-                ${isActive ? `<span class="inline-block w-3 h-3 rounded-full mb-1" style="background-color: ${activeLap.color};"></span>` : ''}
-                <div class="font-mono text-lg font-bold text-neon-cyan">
+            <div class="flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-cyber-dark/50 transition-all duration-200 mb-1 border-l-4"
+                 style="border-left-color: ${borderColor};"
+                 onclick="window.addLapToView(${lap.id})">
+                <span class="font-mono text-sm font-bold text-neon-cyan whitespace-nowrap">
                     ${formatLapTime(lap.lap_time)}
-                    ${lap.is_personal_best ? '<span class="text-xs bg-ridgway-orange text-white px-2 py-1 rounded ml-2">PB</span>' : ''}
-                </div>
-                <div class="text-sm text-gray-400 mt-1">
-                    ${lap.driver ? lap.driver + ' - ' : ''}Lap #${lap.lap_number}
-                    ${lap.session_date ? '<br>' + new Date(lap.session_date).toLocaleDateString() : ''}
-                </div>
+                </span>
+                ${lap.is_personal_best ? '<span class="text-xs bg-ridgway-orange text-white px-1.5 py-0.5 rounded">PB</span>' : ''}
+                <span class="text-sm text-gray-400 truncate">
+                    ${lap.driver || 'Unknown'}
+                </span>
             </div>
         `;
     }).join('');

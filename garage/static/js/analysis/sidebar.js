@@ -4,6 +4,8 @@
  * Handles sidebar collapse/expand functionality.
  */
 
+import { state } from './state.js';
+
 /**
  * Toggle the left sidebar (channel selector)
  */
@@ -22,11 +24,15 @@ export function toggleLeftSidebar() {
         floatingBtn.classList.add('hidden');
     }
 
-    // Resize chart after sidebar animation completes
+    // Resize chart and map after sidebar animation completes
     setTimeout(() => {
         const chartDiv = document.getElementById('telemetryChart');
         if (chartDiv && typeof Plotly !== 'undefined') {
             Plotly.Plots.resize(chartDiv);
+        }
+        // Also resize map if visible
+        if (state.map) {
+            state.map.invalidateSize();
         }
     }, 300);
 }
@@ -49,11 +55,15 @@ export function toggleRightSidebar() {
         floatingBtn.classList.add('hidden');
     }
 
-    // Resize chart after sidebar animation completes
+    // Resize chart and map after sidebar animation completes
     setTimeout(() => {
         const chartDiv = document.getElementById('telemetryChart');
         if (chartDiv && typeof Plotly !== 'undefined') {
             Plotly.Plots.resize(chartDiv);
+        }
+        // Also resize map if visible
+        if (state.map) {
+            state.map.invalidateSize();
         }
     }, 300);
 }

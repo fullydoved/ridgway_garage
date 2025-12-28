@@ -81,6 +81,14 @@ export function initializeMap() {
     // Add map click handler for bidirectional interaction
     state.map.on('click', onMapClick);
     state.map.on('dblclick', clearMapSelection);
+
+    // Watch for container resize and invalidate map size (for responsive layout)
+    const resizeObserver = new ResizeObserver(() => {
+        if (state.map) {
+            state.map.invalidateSize();
+        }
+    });
+    resizeObserver.observe(document.getElementById('mapContainer'));
 }
 
 /**

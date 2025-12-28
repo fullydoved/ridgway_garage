@@ -384,7 +384,7 @@ def api_generate_chart(request):
                         delta = interp_time - interp_fastest_time
 
                         # Choose line style based on whether this is the fastest lap
-                        line_style = dict(color=lap_info['color'], width=2)
+                        line_style = dict(color=lap_info['color'], width=1)
                         if lap_info == fastest_lap:
                             # Fastest lap shows as baseline (delta = 0)
                             line_style['dash'] = 'dot'
@@ -443,7 +443,7 @@ def api_generate_chart(request):
                                 x=x_data,
                                 y=y_data,
                                 name=lap_info['name'],
-                                line=dict(color=lap_info['color'], width=2),
+                                line=dict(color=lap_info['color'], width=1),
                                 hovertemplate=f'Distance: %{{x:.1f}}m<br>{subplot_type}: %{{y:.2f}}<extra></extra>',
                                 connectgaps=True  # Connect line segments even with None values (for Gear)
                             ),
