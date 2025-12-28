@@ -222,6 +222,22 @@ export function renderLapsList(laps, containerId, isUserLaps) {
         const activeLap = state.activeLaps.find(l => l.id === lap.id);
         const borderColor = isActive ? activeLap.color : 'transparent';
 
+        // Format date/time for display
+        let secondaryText = '';
+        if (lap.session_date) {
+            const date = new Date(lap.session_date);
+            const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            if (lap.driver) {
+                // Teammate lap: show driver + date
+                secondaryText = `${lap.driver} · ${dateStr}`;
+            } else {
+                // User's own lap: show just date
+                secondaryText = dateStr;
+            }
+        } else if (lap.driver) {
+            secondaryText = lap.driver;
+        }
+
         return `
             <div class="flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:bg-cyber-dark/50 transition-all duration-200 mb-1 border-l-4"
                  style="border-left-color: ${borderColor};"
@@ -231,7 +247,7 @@ export function renderLapsList(laps, containerId, isUserLaps) {
                 </span>
                 ${lap.is_personal_best ? '<span class="text-xs bg-ridgway-orange text-white px-1.5 py-0.5 rounded">PB</span>' : ''}
                 <span class="text-sm text-gray-400 truncate">
-                    ${lap.driver || 'Unknown'}
+                    ${secondaryText}
                 </span>
             </div>
         `;

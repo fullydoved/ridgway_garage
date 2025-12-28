@@ -2,9 +2,11 @@
 module.exports = {
   content: [
     './new_templates/**/*.html',
+    './templates/**/*.html',  // Main templates directory
     './telemetry/templates/**/*.html',
     './telemetry/**/*.py',  // Include Python files so form widget classes are detected
     './static/src/**/*.js',
+    './static/js/**/*.js',  // Include JS files for dynamic classes
   ],
   safelist: [
     'input-neon',
