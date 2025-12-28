@@ -208,21 +208,19 @@ def parse_ibt_file(self, session_id, skip_notifications=False):
 
         # Get telemetry data
         # Common telemetry channels we want to extract
+        # NOTE: Channels reduced from 70 to 57 for storage efficiency (Dec 2024)
+        # Removed: Alt (unused), all 12 tire carcass temps (LFtempCL/CM/CR, RFtempCL/CM/CR, etc.)
         channels = [
             'Lap', 'LapDist', 'LapDistPct', 'SessionTime', 'Speed',
             'LapLastLapTime', 'LapCurrentLapTime',  # Official iRacing lap times
             'Throttle', 'Brake', 'Clutch', 'Gear', 'RPM', 'SteeringWheelAngle',
-            'Lat', 'Lon', 'Alt',  # GPS data
+            'Lat', 'Lon',  # GPS data (Alt removed - never displayed)
             # Tire surface temps (these change dynamically during the lap)
             'LFtempL', 'LFtempM', 'LFtempR',  # Left Front tire surface temps
             'RFtempL', 'RFtempM', 'RFtempR',  # Right Front tire surface temps
             'LRtempL', 'LRtempM', 'LRtempR',  # Left Rear tire surface temps
             'RRtempL', 'RRtempM', 'RRtempR',  # Right Rear tire surface temps
-            # Tire carcass temps (for reference - change more slowly)
-            'LFtempCL', 'LFtempCM', 'LFtempCR',  # Left Front tire carcass temps
-            'RFtempCL', 'RFtempCM', 'RFtempCR',  # Right Front tire carcass temps
-            'LRtempCL', 'LRtempCM', 'LRtempCR',  # Left Rear tire carcass temps
-            'RRtempCL', 'RRtempCM', 'RRtempCR',  # Right Rear tire carcass temps
+            # Tire carcass temps REMOVED - never displayed, save ~17% storage
             'LFcoldPressure', 'RFcoldPressure', 'LRcoldPressure', 'RRcoldPressure',
             'FuelLevel', 'FuelLevelPct',
             # Suspension - Ride Heights (mm)
@@ -261,6 +259,16 @@ def parse_ibt_file(self, session_id, skip_notifications=False):
             except Exception as e:
                 # Unexpected error - log with more detail for debugging
                 logger.error(f"Unexpected error processing channel {channel}: {type(e).__name__}: {e}", exc_info=True)
+
+        # Decimate telemetry data from 60Hz to 20Hz for storage efficiency
+        # Keep every 3rd sample (60 / 3 = 20Hz) - reduces storage by ~66%
+        DECIMATION_FACTOR = 3
+        original_samples = len(telemetry_data.get('SessionTime', []))
+        for channel in telemetry_data:
+            if isinstance(telemetry_data[channel], list) and len(telemetry_data[channel]) > DECIMATION_FACTOR:
+                telemetry_data[channel] = telemetry_data[channel][::DECIMATION_FACTOR]
+        decimated_samples = len(telemetry_data.get('SessionTime', []))
+        logger.info(f"Decimated telemetry: {original_samples} -> {decimated_samples} samples (60Hz -> 20Hz)")
 
         send_processing_update(
             session_id, 'processing', 30,
