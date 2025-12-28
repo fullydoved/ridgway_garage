@@ -122,8 +122,8 @@
 
         <!-- Content Area: Map + Charts side-by-side on desktop -->
         <div class="flex flex-col lg:flex-row gap-6">
-            <!-- Map Container (left on lg+, bottom on mobile) -->
-            <div id="mapContainer" style="display: none;" class="glass-card p-4 corner-brackets lg:w-[320px] lg:flex-shrink-0 order-2 lg:order-1">
+            <!-- Map Container (left on lg+, bottom on mobile) - sticky on desktop -->
+            <div id="mapContainer" style="display: none;" class="glass-card p-4 corner-brackets lg:w-[320px] lg:flex-shrink-0 order-2 lg:order-1 lg:sticky lg:top-6 lg:self-start">
                 <div class="flex justify-between items-center mb-3">
                     <h3 class="text-lg font-bold text-neon-cyan">Track Map</h3>
                     <button id="toggleMapBackground" class="px-2 py-1 text-xs border border-neon-cyan/50 text-neon-cyan rounded hover:bg-neon-cyan/10 transition-colors">
