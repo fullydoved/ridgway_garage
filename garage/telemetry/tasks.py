@@ -2,14 +2,21 @@
 Celery tasks for processing telemetry data.
 """
 
+import os
+from datetime import timedelta
 from celery import shared_task
 from django.utils import timezone
 from django.core.exceptions import ObjectDoesNotExist
+from django.conf import settings
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# Configuration for IBT file cleanup
+IBT_RETENTION_DAYS = int(os.environ.get('IBT_RETENTION_DAYS', 14))
 
 
 def send_processing_update(session_id, status, progress, message='', current_step=''):
@@ -592,3 +599,71 @@ def parse_ibt_file(self, session_id, skip_notifications=False):
         raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
 
 
+@shared_task
+def cleanup_old_ibt_files():
+    """
+    Delete IBT files older than IBT_RETENTION_DAYS (default: 14 days).
+
+    This task runs daily via Celery Beat to free up disk space.
+    The telemetry data is already parsed and stored in the database,
+    so the original IBT files are no longer needed after processing.
+
+    Set IBT_RETENTION_DAYS environment variable to customize retention period.
+    Set to 0 to disable cleanup (keep files forever).
+    """
+    from .models import Session
+
+    if IBT_RETENTION_DAYS <= 0:
+        logger.info("IBT cleanup disabled (IBT_RETENTION_DAYS=0)")
+        return {'status': 'disabled', 'deleted': 0}
+
+    cutoff_date = timezone.now() - timedelta(days=IBT_RETENTION_DAYS)
+
+    logger.info(f"Cleaning up IBT files older than {IBT_RETENTION_DAYS} days (before {cutoff_date.date()})")
+
+    # Find sessions with IBT files older than retention period
+    old_sessions = Session.objects.filter(
+        created_at__lt=cutoff_date,
+        processing_status='completed'
+    ).exclude(ibt_file='')
+
+    deleted_count = 0
+    freed_bytes = 0
+    errors = []
+
+    for session in old_sessions:
+        if session.ibt_file:
+            try:
+                # Get file size before deleting
+                if session.ibt_file.storage.exists(session.ibt_file.name):
+                    file_size = session.ibt_file.size
+                    file_path = session.ibt_file.name
+
+                    # Delete the file
+                    session.ibt_file.delete(save=False)
+
+                    # Clear the file field
+                    session.ibt_file = ''
+                    session.save(update_fields=['ibt_file'])
+
+                    deleted_count += 1
+                    freed_bytes += file_size
+                    logger.debug(f"Deleted IBT file: {file_path} ({file_size} bytes)")
+
+            except Exception as e:
+                error_msg = f"Error deleting IBT for session {session.id}: {e}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+
+    freed_mb = freed_bytes / (1024 * 1024)
+    logger.info(f"IBT cleanup complete: {deleted_count} files deleted, {freed_mb:.2f} MB freed")
+
+    if errors:
+        logger.warning(f"Cleanup had {len(errors)} errors")
+
+    return {
+        'status': 'completed',
+        'deleted': deleted_count,
+        'freed_mb': round(freed_mb, 2),
+        'errors': len(errors)
+    }

@@ -7,6 +7,7 @@ particularly for parsing large IBT telemetry files.
 
 import os
 from celery import Celery
+from celery.schedules import crontab
 from decouple import config
 
 # Set the default Django settings module for the 'celery' program.
@@ -56,6 +57,15 @@ app.conf.update(
     # Retry settings
     task_acks_late=True,  # Acknowledge task after completion (for reliability)
     task_reject_on_worker_lost=True,  # Requeue task if worker dies
+
+    # Celery Beat schedule for periodic tasks
+    beat_schedule={
+        'cleanup-old-ibt-files': {
+            'task': 'telemetry.tasks.cleanup_old_ibt_files',
+            'schedule': crontab(hour=3, minute=0),  # Run daily at 3 AM UTC
+            'options': {'queue': 'celery'},
+        },
+    },
 )
 
 
