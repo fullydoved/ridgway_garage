@@ -9,15 +9,70 @@ CONTAINER_NAME="ridgway_garage_db"
 DB_NAME="ridgway_garage"
 DB_USER="postgres"
 
-# Check arguments
-if [ -z "$1" ]; then
-    echo "Usage: $0 <backup_file.sql.gz>"
-    echo ""
-    echo "Example: $0 ridgway_backup_20250128_120000.sql.gz"
-    exit 1
-fi
+# Default values
+FORCE=false
+MERGE=false
 
-BACKUP_FILE="$1"
+usage() {
+    cat << EOF
+Usage: $(basename "$0") [OPTIONS] <backup_file>
+
+Restore a Ridgway Garage database backup.
+
+ARGUMENTS:
+    backup_file         The backup file to restore (.sql or .sql.gz)
+
+OPTIONS:
+    -f, --force         Skip confirmation prompt
+    -m, --merge         Merge data instead of replacing (for filtered backups)
+    -h, --help          Show this help message
+
+EXAMPLES:
+    $(basename "$0") ridgway_backup_20250128_120000.sql.gz
+    $(basename "$0") --force backup.sql.gz          # No confirmation
+    $(basename "$0") --merge session_backup.sql.gz  # Merge filtered data
+
+NOTES:
+    - Without --merge, the database will be dropped and recreated
+    - With --merge, data is imported into existing database (for filtered backups)
+    - Web and Celery containers are stopped during restore
+
+EOF
+    exit 0
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -f|--force)
+            FORCE=true
+            shift
+            ;;
+        -m|--merge)
+            MERGE=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+        *)
+            BACKUP_FILE="$1"
+            shift
+            ;;
+    esac
+done
+
+# Check arguments
+if [ -z "$BACKUP_FILE" ]; then
+    echo "Error: No backup file specified"
+    echo ""
+    usage
+fi
 
 # Check if file exists
 if [ ! -f "$BACKUP_FILE" ]; then
@@ -29,6 +84,11 @@ echo "=== Ridgway Garage Database Restore ==="
 echo "Container: $CONTAINER_NAME"
 echo "Database: $DB_NAME"
 echo "Backup: $BACKUP_FILE"
+if [ "$MERGE" = true ]; then
+    echo "Mode: MERGE (importing into existing database)"
+else
+    echo "Mode: REPLACE (drop and recreate database)"
+fi
 echo ""
 
 # Check if container is running
@@ -39,23 +99,31 @@ if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
 fi
 
 # Confirm restore
-read -p "This will DROP and recreate the database. Continue? (y/N) " -n 1 -r
-echo ""
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "Aborted."
-    exit 0
+if [ "$FORCE" = false ]; then
+    if [ "$MERGE" = true ]; then
+        read -p "This will MERGE data into the existing database. Continue? (y/N) " -n 1 -r
+    else
+        read -p "This will DROP and RECREATE the database. Continue? (y/N) " -n 1 -r
+    fi
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
 fi
 
 # Stop web and celery to avoid connection issues
 echo "Stopping web and celery containers..."
 docker compose stop web celery_worker celery_beat 2>/dev/null || true
 
-# Drop and recreate database
-echo "Dropping existing database..."
-docker exec "$CONTAINER_NAME" psql -U "$DB_USER" -c "DROP DATABASE IF EXISTS $DB_NAME;"
+if [ "$MERGE" = false ]; then
+    # Drop and recreate database
+    echo "Dropping existing database..."
+    docker exec "$CONTAINER_NAME" psql -U "$DB_USER" -c "DROP DATABASE IF EXISTS $DB_NAME;"
 
-echo "Creating fresh database..."
-docker exec "$CONTAINER_NAME" psql -U "$DB_USER" -c "CREATE DATABASE $DB_NAME;"
+    echo "Creating fresh database..."
+    docker exec "$CONTAINER_NAME" psql -U "$DB_USER" -c "CREATE DATABASE $DB_NAME;"
+fi
 
 # Restore backup
 echo "Restoring backup (this may take a while)..."
